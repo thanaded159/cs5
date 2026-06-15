@@ -310,9 +310,10 @@
     }
 
     function mapLandmarkToCanvas(point) {
-      // video ถูก mirror ด้วย scaleX(-1) จึงกลับค่า x เพื่อให้เคอร์เซอร์ตามมืออย่างเป็นธรรมชาติ
+      // ใช้ selfieMode:true ของ MediaPipe ให้พิกัด landmark อยู่ในมุมมองแบบกระจกแล้ว
+      // ดังนั้นไม่ต้องกลับค่า x ซ้ำ ไม่เช่นนั้นมือซ้าย/ขวาหรือเคอร์เซอร์จะดูสลับข้าง
       return {
-        x: (1 - point.x) * canvas.width,
+        x: point.x * canvas.width,
         y: point.y * canvas.height
       };
     }

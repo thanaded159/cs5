@@ -217,7 +217,8 @@
       pointer-events: none;
       z-index: 99999;
       opacity: 0;
-      transition: width .1s ease, height .1s ease, border-color .1s ease, opacity .2s ease;
+      will-change: left, top, width, height, opacity;
+      transition: width .08s ease, height .08s ease, border-color .08s ease, opacity .16s ease;
     }
     #arCursor.visible { opacity: 1; }
     #arCursor.pinching {
@@ -403,6 +404,15 @@
       handDetected: false,
       handPinching: false,
       lastHandPinching: false,
+      handLostFrames: 0,
+      handSeenFrames: 0,
+      lastHandSeenAt: 0,
+      smoothedCursorX: null,
+      smoothedCursorY: null,
+      smoothedPinchRatio: null,
+      frameProcessing: false,
+      lastFrameSentAt: 0,
+      frameIntervalMs: 33,
       cursorX: window.innerWidth / 2,
       cursorY: window.innerHeight / 2,
       dragging: null,
@@ -476,14 +486,15 @@
     }
 
     function updateStatus(message) {
-      if (message) {
-        el.statusBadge.textContent = message;
-        return;
+      let text = message || '';
+      if (!text) {
+        if (state.cameraRunning && state.handDetected) text = 'ตรวจพบมือแล้ว';
+        else if (state.cameraRunning && !state.handDetected) text = 'ไม่พบมือ';
+        else if (state.mouseMode) text = 'ใช้โหมดเมาส์';
+        else text = 'พร้อมเริ่มเกม';
       }
-      if (state.cameraRunning && state.handDetected) el.statusBadge.textContent = 'ตรวจพบมือแล้ว';
-      else if (state.cameraRunning && !state.handDetected) el.statusBadge.textContent = 'ไม่พบมือ';
-      else if (state.mouseMode) el.statusBadge.textContent = 'ใช้โหมดเมาส์';
-      else el.statusBadge.textContent = 'พร้อมเริ่มเกม';
+      // Avoid unnecessary DOM writes on every MediaPipe frame.
+      if (el.statusBadge.textContent !== text) el.statusBadge.textContent = text;
     }
 
     function formatTime(ms) {
@@ -602,27 +613,41 @@
 
         hands.setOptions({
           maxNumHands: 1,
-          modelComplexity: 1,
-          minDetectionConfidence: 0.68,
-          minTrackingConfidence: 0.58
+          // Fast mode: lower model complexity and moderate thresholds improve real-time stability on school laptops.
+          modelComplexity: 0,
+          minDetectionConfidence: 0.55,
+          minTrackingConfidence: 0.50
         });
 
         hands.onResults(onHandResults);
 
         camera = new Camera(el.video, {
           onFrame: async () => {
-            if (hands && state.cameraRunning) await hands.send({ image: el.video });
+            const now = performance.now();
+            if (!hands || !state.cameraRunning || state.frameProcessing) return;
+            if (now - state.lastFrameSentAt < state.frameIntervalMs) return;
+            state.lastFrameSentAt = now;
+            state.frameProcessing = true;
+            try {
+              await hands.send({ image: el.video });
+            } catch (err) {
+              console.warn('MediaPipe frame skipped:', err);
+            } finally {
+              state.frameProcessing = false;
+            }
           },
-          width: 1280,
-          height: 720
+          // 640x480 is much faster and stable enough for hand cursor control.
+          width: 640,
+          height: 480
         });
 
         await camera.start();
         state.cameraRunning = true;
         el.video.classList.add('active');
         el.cameraBtn.textContent = 'ปิดกล้อง AR';
+        resetHandTrackingStabilizer();
         state.handDetected = false;
-        updateStatus('ไม่พบมือ');
+        updateStatus('กำลังค้นหามือ');
         showFeedback('เปิดกล้อง AR แล้ว ลองชี้นิ้วและหนีบนิ้วเพื่อหยิบวัตถุ', 'success', 2600);
       } catch (err) {
         console.error(err);
@@ -641,6 +666,7 @@
       state.handDetected = false;
       state.handPinching = false;
       state.lastHandPinching = false;
+      resetHandTrackingStabilizer();
       el.video.classList.remove('active');
       el.arCursor.classList.remove('visible', 'pinching');
       el.cameraBtn.textContent = 'เปิดกล้อง AR';
@@ -660,31 +686,123 @@
       updateHUD();
     }
 
+    function resetHandTrackingStabilizer() {
+      state.handLostFrames = 0;
+      state.handSeenFrames = 0;
+      state.lastHandSeenAt = 0;
+      state.smoothedCursorX = null;
+      state.smoothedCursorY = null;
+      state.smoothedPinchRatio = null;
+      state.frameProcessing = false;
+      state.lastFrameSentAt = 0;
+    }
+
+    function setHandPresence(hasHand) {
+      const now = performance.now();
+
+      if (hasHand) {
+        state.handLostFrames = 0;
+        state.handSeenFrames += 1;
+        state.lastHandSeenAt = now;
+        // Require 2 consecutive detections before switching to “found hand”.
+        if (!state.handDetected && state.handSeenFrames >= 2) state.handDetected = true;
+      } else {
+        state.handSeenFrames = 0;
+        state.handLostFrames += 1;
+        const graceTimePassed = now - state.lastHandSeenAt > 320;
+        // Do not instantly drop hand status on a single missed frame.
+        if (state.handLostFrames >= 6 && graceTimePassed) state.handDetected = false;
+      }
+
+      return state.handDetected;
+    }
+
+    function smoothCursorPoint(x, y) {
+      if (state.smoothedCursorX === null || state.smoothedCursorY === null) {
+        state.smoothedCursorX = x;
+        state.smoothedCursorY = y;
+        return { x, y };
+      }
+
+      const dx = x - state.smoothedCursorX;
+      const dy = y - state.smoothedCursorY;
+      const distance = Math.hypot(dx, dy);
+
+      // Adaptive smoothing: stable for tiny jitters, responsive for large hand movement.
+      const alpha = distance > 160 ? 0.82 : distance > 70 ? 0.62 : distance > 16 ? 0.44 : 0.28;
+      if (distance < 1.2) return { x: state.smoothedCursorX, y: state.smoothedCursorY };
+
+      state.smoothedCursorX += dx * alpha;
+      state.smoothedCursorY += dy * alpha;
+      return { x: state.smoothedCursorX, y: state.smoothedCursorY };
+    }
+
+    function getPinchRatio(landmarks) {
+      const thumbTip = landmarks[4];
+      const indexTip = landmarks[8];
+      const wrist = landmarks[0];
+      const indexMcp = landmarks[5];
+      const middleMcp = landmarks[9];
+      const pinkyMcp = landmarks[17];
+
+      const pinchDistance = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+      const palmWidth = Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y);
+      const palmLength = Math.hypot(wrist.x - middleMcp.x, wrist.y - middleMcp.y);
+      const handScale = Math.max(0.001, (palmWidth * 0.72) + (palmLength * 0.28));
+      const ratio = pinchDistance / handScale;
+
+      if (state.smoothedPinchRatio === null) state.smoothedPinchRatio = ratio;
+      else state.smoothedPinchRatio += (ratio - state.smoothedPinchRatio) * 0.38;
+
+      return state.smoothedPinchRatio;
+    }
+
+    function releaseHandDragIfLost() {
+      if (!state.dragging) return;
+      const drag = state.dragging;
+      returnDragHome(drag, true);
+      state.dragging = null;
+      clearZoneHighlights();
+    }
+
     function onHandResults(results) {
       if (!state.cameraRunning) return;
-      const hasHand = !!(results.multiHandLandmarks && results.multiHandLandmarks.length > 0);
-      state.handDetected = hasHand;
 
-      if (!hasHand) {
-        el.arCursor.classList.remove('visible', 'pinching');
-        state.lastHandPinching = state.handPinching;
+      const landmarksList = results.multiHandLandmarks || [];
+      const handednessScore = results.multiHandedness?.[0]?.score ?? 1;
+      const hasReliableHand = landmarksList.length > 0 && handednessScore >= 0.45;
+
+      if (!hasReliableHand) {
+        const stillInGracePeriod = setHandPresence(false);
         state.handPinching = false;
-        updateStatus('ไม่พบมือ');
+
+        if (!stillInGracePeriod) {
+          el.arCursor.classList.remove('visible', 'pinching');
+          state.lastHandPinching = false;
+          state.smoothedPinchRatio = null;
+          releaseHandDragIfLost();
+          updateStatus('ไม่พบมือ');
+        } else {
+          // Keep cursor visible briefly to avoid flicker from one missed frame.
+          updateStatus('ตรวจพบมือแล้ว');
+        }
         return;
       }
 
-      const landmarks = results.multiHandLandmarks[0];
+      setHandPresence(true);
+
+      const landmarks = landmarksList[0];
       const indexTip = landmarks[8];
-      const thumbTip = landmarks[4];
       const mapped = mapHandToScreen(indexTip.x, indexTip.y);
-      const dist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+      const smooth = smoothCursorPoint(mapped.x, mapped.y);
+      const pinchRatio = getPinchRatio(landmarks);
 
-      // Hysteresis makes pinch more stable.
-      if (!state.handPinching && dist < 0.055) state.handPinching = true;
-      if (state.handPinching && dist > 0.082) state.handPinching = false;
+      // Scale-normalized hysteresis makes pinch stable even when the hand moves closer/farther from the camera.
+      if (!state.handPinching && pinchRatio < 0.62) state.handPinching = true;
+      if (state.handPinching && pinchRatio > 0.82) state.handPinching = false;
 
-      updateCursor(mapped.x, mapped.y, state.handPinching);
-      handlePinch(mapped.x, mapped.y, state.handPinching);
+      updateCursor(smooth.x, smooth.y, state.handPinching);
+      handlePinch(smooth.x, smooth.y, state.handPinching);
       updateStatus('ตรวจพบมือแล้ว');
     }
 

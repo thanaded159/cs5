@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Quest AR: ภารกิจนักวิทยาการข้อมูล</title>
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Noto Sans Thai -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans Thai', sans-serif;
+            overflow: hidden; /* ป้องกันการ Scroll */
+            background-color: #0f172a;
+            user-select: none;
+        }
+
+        /* Glassmorphism Effect */
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        /* AR Cursor */
+        #ar-cursor {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(56, 189, 248, 0.8);
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 9999;
+            transition: transform 0.1s, background-color 0.2s;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
+            display: none;
+        }
+
+        #ar-cursor.pinching {
+            transform: translate(-50%, -50%) scale(0.6);
+            background-color: #facc15; /* สีเหลืองเมื่อหนีบนิ้ว */
+            box-shadow: 0 0 20px #facc15;
+        }
+
+        /* Video Background */
+        .video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* กลับซ้ายขวาให้เหมือนกระจก */
+            opacity: 0.4; /* ให้มืดลงเพื่อให้ UI เด่น */
+        }
+
+        .cyber-bg {
+            background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);
+        }
+
+        /* Draggable Items */
+        .draggable {
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+        .draggable:active, .is-dragged {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 50;
+        }
+
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* Notifications */
+        #notification {
+            transition: opacity 0.3s, transform 0.3s;
+        }
+    </style>
+</head>
+<body class="text-white cyber-bg">
+
+    <!-- AR Camera Background -->
+    <div class="video-container">
+        <video id="webcam" autoplay playsinline></video>
+    </div>
+
+    <!-- AR Cursor Indicator -->
+    <div id="ar-cursor"></div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 opacity-0 pointer-events-none">
+        <div id="notif-content" class="px-6 py-3 rounded-full text-lg font-bold shadow-lg text-center">
+            ข้อความแจ้งเตือน
+        </div>
+    </div>
+
+    <!-- Main UI Container -->
+    <div id="app" class="relative w-full h-screen flex flex-col p-4">
+
+        <!-- Header / Status Bar (Hidden on Intro) -->
+        <header id="status-bar" class="hidden glass-dark rounded-xl p-4 mb-4 flex justify-between items-center z-10">
+            <div class="flex items-center gap-4">
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <span class="font-bold text-xl">ด่านที่ <span id="current-stage-display">1</span>/5</span>
+                </div>
+                <div>
+                    <h2 id="stage-title" class="text-xl font-bold text-blue-300">ชื่อด่าน</h2>
+                    <p id="stage-desc" class="text-sm text-gray-300">คำอธิบาย</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="text-right">
+                    <p class="text-sm text-gray-400">คะแนน</p>
+                    <p class="text-3xl font-bold text-yellow-400" id="score-display">0</p>
+                </div>
+                <div id="camera-status" class="flex items-center gap-2 text-red-400 bg-red-400/20 px-3 py-1 rounded-full text-sm">
+                    <span class="relative flex h-3 w-3">
+                      <span id="cam-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span id="cam-dot" class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                    <span id="cam-text">กล้องปิดอยู่ / เมาส์โหมด</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Screens Container -->
+        <main class="flex-grow relative z-10">
+
+            <!-- 0. Intro Screen -->
+            <div id="screen-intro" class="absolute inset-0 flex flex-col items-center justify-center text-center space-y-8 glass rounded-3xl p-8 max-w-4xl mx-auto my-auto h-fit">
+                <div class="animate-pulse">
+                    <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
+                        Data Quest AR
+                    </h1>
+                    <h2 class="text-3xl text-white">ภารกิจนักวิทยาการข้อมูล</h2>
+                </div>
+                <p class="text-lg text-gray-300 max-w-2xl">
+                    รับบทนักวิทยาการข้อมูลรุ่นเยาว์ ช่วยโรงเรียนวิเคราะห์ข้อมูลการมาสายของนักเรียน ผ่านกระบวนการ 5 ขั้นตอน โดยใช้ <b>มือของคุณ</b> ควบคุมผ่านกล้อง Webcam
+                </p>
+                
+                <div class="grid grid-cols-2 gap-4 w-full max-w-lg mt-8">
+                    <button onclick="startGame(true)" class="bg-blue-600 hover:bg-blue-500 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/50 transition-all hover:scale-105 border border-blue-400">
+                        📹 เริ่มเกม (เปิดกล้อง AR)
+                    </button>
+                    <button onclick="startGame(false)" class="bg-slate-700 hover:bg-slate-600 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all hover:scale-105 border border-slate-500">
+                        🖱️ เล่นด้วยเมาส์ (ไม่ใช้กล้อง)
+                    </button>
+                </div>
+                <p class="text-sm text-yellow-300 mt-4">* โหมด AR: ใช้นิ้วชี้เพื่อเลื่อน และจีบนิ้ว (นิ้วชี้+นิ้วโป้ง) เพื่อจับ/คลิก</p>
+            </div>
+
+            <!-- 1. Stage 1: Ask (Drag Question) -->
+            <div id="screen-stage1" class="hidden absolute inset-0 flex flex-col items-center justify-between p-4">
+                <!-- Helper Bot -->
+                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
+                    <div class="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-3xl shadow-lg shadow-blue-500/50 shrink-0">🤖</div>
+                    <p class="text-lg">"สวัสดี! เริ่มภารกิจแรก <b>การตั้งคำถาม</b> โรงเรียนอยากรู้ว่าทำไมนักเรียนมาสาย ลากคำถามที่ดีที่สุดลงไปในกล่องวิเคราะห์เลย จีบนิ้วเพื่อจับนะ!"</p>
+                </div>
+
+                <!-- Dropzone -->
+                <div id="dropzone-s1" class="w-full max-w-2xl h-48 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-900/40 transition-colors">
+                    <p class="text-2xl text-blue-200 font-bold opacity-50">วางคำถามที่เหมาะสมที่นี่</p>
+                </div>
+
+                <!-- Draggable Cards -->
+                <div class="grid grid-cols-2 gap-6 w-full max-w-4xl mt-8">
+                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="false" data-original-x="0" data-original-y="0">
+                        นักเรียนคนใดนิสัยไม่ดีถึงมาสาย?
+                    </div>
+                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="true" data-original-x="0" data-original-y="0">
+                        ปัจจัยใดบ้างที่สัมพันธ์กับการมาโรงเรียนสาย?
+                    </div>
+                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="true" data-original-x="0" data-original-y="0">
+                        ช่วงเวลาใดมีนักเรียนมาสายมากที่สุด?
+                    </div>
+                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="false" data-original-x="0" data-original-y="0">
+                        ใครควรถูกลงโทษกวาดลานวัด?
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Stage 2: Collect -->
+            <div id="screen-stage2" class="hidden absolute inset-0 flex flex-col items-center p-4">
+                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-8">
+                    <div class="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
+                    <p class="text-lg">"เยี่ยมมาก! ต่อไปคือ <b>การเก็บรวบรวมข้อมูล</b> เลือกเก็บเฉพาะข้อมูลที่จำเป็นและไม่ละเมิดสิทธิส่วนบุคคลมากเกินไปนะ แตะ/จับข้อมูลที่ถูกต้อง!"</p>
+                </div>
+
+                <div class="relative w-full h-full flex items-center justify-center">
+                    <!-- Cards scattered via CSS/JS -->
+                    <div class="flex flex-wrap justify-center gap-6 max-w-4xl">
+                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-green-500/50 transition-colors" data-correct="true">เวลาเข้าโรงเรียน</button>
+                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-green-500/50 transition-colors" data-correct="true">วิธีเดินทาง</button>
+                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-red-500/50 transition-colors" data-correct="false">เลขประจำตัวประชาชน</button>
+                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-green-500/50 transition-colors" data-correct="true">ระดับชั้น</button>
+                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-red-500/50 transition-colors" data-correct="false">สีรองเท้าที่ชอบ</button>
+                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-red-500/50 transition-colors" data-correct="false">เบอร์โทรผู้ปกครอง</button>
+                    </div>
+                </div>
+                <p class="mt-8 text-xl text-yellow-300">เลือกข้อมูลที่ถูกต้องให้ครบ 3 อย่าง</p>
+            </div>
+
+            <!-- 3. Stage 3: Explore -->
+            <div id="screen-stage3" class="hidden absolute inset-0 flex flex-col items-center p-4">
+                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
+                    <div class="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
+                    <p class="text-lg">"ได้ข้อมูลมาแล้ว! แต่เดี๋ยวก่อน ต้องทำ <b>การสำรวจข้อมูล (Data Exploration)</b> คลิก/จับที่ข้อมูลที่ผิดปกติ (Outlier, Missing, Error) เพื่อกำจัดทิ้ง"</p>
+                </div>
+
+                <div class="glass w-full max-w-4xl rounded-xl overflow-hidden mt-4 text-lg">
+                    <table class="w-full text-center">
+                        <thead class="bg-blue-900/80 text-white">
+                            <tr>
+                                <th class="py-3">วันที่</th>
+                                <th class="py-3">ระดับชั้น</th>
+                                <th class="py-3">เวลาเข้า</th>
+                                <th class="py-3">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-white/20 hover:bg-white/10">
+                                <td class="py-3">จันทร์</td><td>ม.5</td><td>07:45</td><td>ปกติ</td>
+                            </tr>
+                            <tr class="row-s3 border-b border-white/20 hover:bg-red-500/40 cursor-pointer" data-error="true">
+                                <td class="py-3 text-red-300">อังคาร</td><td class="text-red-300">ม.99</td><td class="text-red-300">08:05</td><td class="text-red-300">สาย</td>
+                            </tr>
+                            <tr class="border-b border-white/20 hover:bg-white/10">
+                                <td class="py-3">พุธ</td><td>ม.4</td><td>08:10</td><td>สาย</td>
+                            </tr>
+                            <tr class="row-s3 border-b border-white/20 hover:bg-red-500/40 cursor-pointer" data-error="true">
+                                <td class="py-3 text-red-300">พฤหัส</td><td class="text-red-300">ม.6</td><td class="text-red-300">--:--</td><td class="text-red-300">ว่างเปล่า</td>
+                            </tr>
+                            <tr class="row-s3 border-b border-white/20 hover:bg-red-500/40 cursor-pointer" data-error="true">
+                                <td class="py-3 text-red-300">ศุกร์</td><td class="text-red-300">ม.5</td><td class="text-red-300">25:99</td><td class="text-red-300">สาย</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 4. Stage 4: Analyze -->
+            <div id="screen-stage4" class="hidden absolute inset-0 flex flex-col items-center p-4">
+                 <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
+                    <div class="w-16 h-16 bg-purple-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
+                    <p class="text-lg">"ถึงเวลา <b>การวิเคราะห์ข้อมูล</b> เลือกจับคู่วิธีวิเคราะห์ให้ตรงกับเป้าหมายของเรา (คลิกคำถาม แล้วคลิกวิธีที่ใช่)"</p>
+                </div>
+
+                <div class="flex w-full max-w-5xl justify-between mt-8 gap-8">
+                    <!-- Question -->
+                    <div class="w-1/2 space-y-6">
+                        <h3 class="text-2xl font-bold text-center text-blue-300 mb-4">สิ่งที่อยากรู้</h3>
+                        <div class="glass p-6 rounded-xl border-2 border-yellow-400 bg-yellow-400/20 text-xl text-center">
+                            ปัจจัยใด (เช่น วิธีเดินทาง, ระดับชั้น) สัมพันธ์กับการมาสายมากที่สุด?
+                        </div>
+                    </div>
+                    
+                    <!-- Methods -->
+                    <div class="w-1/2 space-y-4">
+                        <h3 class="text-2xl font-bold text-center text-purple-300 mb-4">วิธีวิเคราะห์</h3>
+                        <button class="btn-s4 w-full glass p-4 rounded-xl text-lg hover:bg-purple-600/50 text-left transition" data-correct="false">
+                            A. หาค่าเฉลี่ยอายุของนักเรียนทั้งโรงเรียน
+                        </button>
+                        <button class="btn-s4 w-full glass p-4 rounded-xl text-lg hover:bg-purple-600/50 text-left transition" data-correct="true">
+                            B. จัดกลุ่มจำนวนคนมาสาย แยกตามวิธีเดินทางและระดับชั้น เพื่อเปรียบเทียบ
+                        </button>
+                        <button class="btn-s4 w-full glass p-4 rounded-xl text-lg hover:bg-purple-600/50 text-left transition" data-correct="false">
+                            C. เรียงลำดับชื่อนักเรียนตามตัวอักษร ก-ฮ
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Stage 5: Visualize -->
+            <div id="screen-stage5" class="hidden absolute inset-0 flex flex-col items-center p-4">
+                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
+                    <div class="w-16 h-16 bg-pink-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
+                    <p class="text-lg">"ขั้นสุดท้าย! <b>การสื่อสารและทำผลลัพธ์ให้เป็นภาพ</b> เราพบว่าเด็กนั่งรถเมล์มาสายเยอะสุด จะนำเสนอด้วยกราฟแบบไหนให้ ผอ. เข้าใจง่ายที่สุด?"</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-8 w-full max-w-4xl mt-8">
+                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" data-correct="true">
+                        <div class="w-48 h-32 bg-white/10 rounded flex items-end justify-center gap-2 p-4">
+                            <div class="w-8 bg-blue-400 h-1/3"></div>
+                            <div class="w-8 bg-blue-400 h-2/3"></div>
+                            <div class="w-8 bg-red-400 h-full"></div> <!-- รถเมล์ -->
+                            <div class="w-8 bg-blue-400 h-1/2"></div>
+                        </div>
+                        <p class="mt-4 text-xl font-bold">กราฟแท่งเปรียบเทียบ</p>
+                    </div>
+                    
+                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" data-correct="false">
+                        <div class="w-32 h-32 rounded-full border-8 border-t-blue-400 border-r-green-400 border-b-yellow-400 border-l-purple-400"></div>
+                        <p class="mt-4 text-xl font-bold">กราฟวงกลม (สัดส่วน)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Final Challenge: Ordering -->
+            <div id="screen-final" class="hidden absolute inset-0 flex flex-col items-center p-4">
+                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-2">
+                    <div class="w-16 h-16 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🏆</div>
+                    <p class="text-lg">"ด่านสุดท้าย! จัดเรียง 5 ขั้นตอนของกระบวนการวิทยาการข้อมูลให้ถูกต้อง (คลิกเลือกตามลำดับ 1 ถึง 5)"</p>
+                </div>
+
+                <!-- Target Slots -->
+                <div class="flex gap-2 w-full max-w-5xl justify-center mb-8 h-20 items-end">
+                    <div id="slot-1" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">1</div>
+                    <div class="text-2xl text-white pt-4">➔</div>
+                    <div id="slot-2" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">2</div>
+                    <div class="text-2xl text-white pt-4">➔</div>
+                    <div id="slot-3" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">3</div>
+                    <div class="text-2xl text-white pt-4">➔</div>
+                    <div id="slot-4" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">4</div>
+                    <div class="text-2xl text-white pt-4">➔</div>
+                    <div id="slot-5" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">5</div>
+                </div>
+
+                <!-- Choices -->
+                <div id="final-choices" class="flex flex-wrap justify-center gap-4 max-w-4xl">
+                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="3">สำรวจข้อมูล</button>
+                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="5">สื่อสารด้วยภาพ</button>
+                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="1">ตั้งคำถาม</button>
+                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="4">วิเคราะห์ข้อมูล</button>
+                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="2">รวบรวมข้อมูล</button>
+                </div>
+            </div>
+
+            <!-- Summary Screen -->
+            <div id="screen-summary" class="hidden absolute inset-0 flex flex-col items-center justify-center p-4">
+                <div class="glass rounded-3xl p-10 max-w-3xl w-full text-center space-y-6 bg-slate-900/80">
+                    <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">ภารกิจสำเร็จ!</h1>
+                    
+                    <div class="py-6">
+                        <p class="text-2xl text-gray-300">คะแนนของคุณ</p>
+                        <p class="text-7xl font-black text-white my-4" id="final-score">100</p>
+                        <div class="inline-block px-6 py-2 rounded-full text-2xl font-bold mt-2" id="rank-badge">
+                            ระดับ: Data Scientist Master
+                        </div>
+                    </div>
+
+                    <div class="text-left bg-black/30 p-6 rounded-xl border border-white/10">
+                        <h3 class="text-xl font-bold text-blue-300 mb-2">สรุป 5 ขั้นตอน (Data Science Process)</h3>
+                        <ol class="list-decimal list-inside text-lg space-y-2 text-gray-300">
+                            <li><b class="text-white">Ask:</b> ตั้งคำถามที่ชัดเจน</li>
+                            <li><b class="text-white">Collect:</b> เก็บรวบรวมข้อมูลที่เกี่ยวข้อง</li>
+                            <li><b class="text-white">Explore:</b> สำรวจและทำความสะอาดข้อมูล</li>
+                            <li><b class="text-white">Analyze:</b> วิเคราะห์เพื่อหาคำตอบ</li>
+                            <li><b class="text-white">Visualize:</b> สื่อสารและนำเสนอด้วยภาพ</li>
+                        </ol>
+                    </div>
+
+                    <button onclick="location.reload()" class="mt-8 bg-blue-600 hover:bg-blue-500 text-white py-4 px-10 rounded-xl font-bold text-xl shadow-lg transition-all hover:scale-105">
+                        เล่นอีกครั้ง
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Game Logic -->
+    <script>
+        // --- Game State ---
+        let state = {
+            mode: 'mouse', // 'ar' or 'mouse'
+            stage: 0,
+            score: 0,
+            s2Collected: 0,
+            s3Removed: 0,
+            finalOrderIndex: 1,
+            isPinching: false,
+            draggedElement: null,
+            dragOffsetX: 0,
+            dragOffsetY: 0
+        };
+
+        const stageInfo = [
+            { id: 'intro', title: '', desc: '' },
+            { id: 'stage1', title: 'จุดประกายคำถาม', desc: 'เลือกคำถามที่ดีที่สุด' },
+            { id: 'stage2', title: 'ตามล่าข้อมูล', desc: 'รวบรวมข้อมูลที่เกี่ยวข้อง' },
+            { id: 'stage3', title: 'ตรวจสุขภาพข้อมูล', desc: 'กำจัดข้อมูลที่ผิดปกติ' },
+            { id: 'stage4', title: 'ถอดรหัสคำตอบ', desc: 'เลือกวิธีวิเคราะห์' },
+            { id: 'stage5', title: 'เล่าเรื่องด้วยภาพ', desc: 'เลือกกราฟนำเสนอ' },
+            { id: 'final', title: 'เส้นทางนักวิทยาการข้อมูล', desc: 'จัดเรียง 5 ขั้นตอน' },
+            { id: 'summary', title: '', desc: '' }
+        ];
+
+        // --- DOM Elements ---
+        const uiCursor = document.getElementById('ar-cursor');
+        const notif = document.getElementById('notification');
+        const notifContent = document.getElementById('notif-content');
+        const scoreDisplay = document.getElementById('score-display');
+        const camDot = document.getElementById('cam-dot');
+        const camPing = document.getElementById('cam-ping');
+        const camText = document.getElementById('cam-text');
+
+        // --- Core Functions ---
+
+        function startGame(useAR) {
+            state.mode = useAR ? 'ar' : 'mouse';
+            
+            if (useAR) {
+                initMediaPipe();
+                uiCursor.style.display = 'block';
+                camDot.classList.replace('bg-red-500', 'bg-green-500');
+                camPing.classList.replace('bg-red-400', 'bg-green-400');
+                camText.innerText = 'AR ทำงานแล้ว';
+                camText.classList.replace('text-red-400', 'text-green-400');
+            } else {
+                camDot.classList.replace('bg-red-500', 'bg-gray-500');
+                camPing.classList.add('hidden');
+                camText.innerText = 'ใช้เมาส์เล่น';
+                camText.classList.replace('text-red-400', 'text-gray-400');
+            }
+
+            document.getElementById('status-bar').classList.remove('hidden');
+            goToStage(1);
+        }
+
+        function goToStage(stageNum) {
+            // Hide all screens
+            document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
+            
+            state.stage = stageNum;
+            const info = stageInfo[stageNum];
+            
+            document.getElementById(`screen-${info.id}`).classList.remove('hidden');
+            document.getElementById('current-stage-display').innerText = stageNum <= 5 ? stageNum : (stageNum === 6 ? 'Final' : '-');
+            document.getElementById('stage-title').innerText = info.title;
+            document.getElementById('stage-desc').innerText = info.desc;
+
+            if (stageNum === 7) showSummary();
+        }
+
+        function updateScore(points) {
+            state.score += points;
+            scoreDisplay.innerText = state.score;
+            scoreDisplay.classList.add('scale-150', 'text-green-400');
+            setTimeout(() => scoreDisplay.classList.remove('scale-150', 'text-green-400'), 300);
+        }
+
+        function showNotif(msg, isSuccess) {
+            notifContent.innerText = msg;
+            notifContent.className = `px-6 py-3 rounded-full text-lg font-bold shadow-lg text-center ${isSuccess ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
+            notif.classList.remove('opacity-0', '-translate-y-10');
+            setTimeout(() => notif.classList.add('opacity-0', '-translate-y-10'), 2000);
+        }
+
+        // --- AR & MediaPipe System ---
+        let hands, camera;
+
+        function initMediaPipe() {
+            const videoElement = document.getElementById('webcam');
+            
+            hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+            
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            });
+            
+            hands.onResults(onARResults);
+            
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 640,
+                height: 480
+            });
+            camera.start();
+        }
+
+        function onARResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Index finger tip (8)
+                const indexX = (1 - landmarks[8].x) * window.innerWidth; // Mirror X
+                const indexY = landmarks[8].y * window.innerHeight;
+                
+                // Thumb tip (4)
+                const thumbX = (1 - landmarks[4].x) * window.innerWidth;
+                const thumbY = landmarks[4].y * window.innerHeight;
+
+                // Move visual cursor
+                uiCursor.style.left = `${indexX}px`;
+                uiCursor.style.top = `${indexY}px`;
+
+                // Calculate pinch distance
+                const dist = Math.hypot(indexX - thumbX, indexY - thumbY);
+                const isPinchingNow = dist < 50; // Threshold
+
+                if (isPinchingNow && !state.isPinching) {
+                    // Pinch Started (Click/Grab)
+                    uiCursor.classList.add('pinching');
+                    handleInteraction(indexX, indexY, 'start');
+                } else if (!isPinchingNow && state.isPinching) {
+                    // Pinch Ended (Release)
+                    uiCursor.classList.remove('pinching');
+                    handleInteraction(indexX, indexY, 'end');
+                } else if (isPinchingNow && state.isPinching) {
+                    // Pinch Move (Drag)
+                    handleInteraction(indexX, indexY, 'move');
+                }
+
+                state.isPinching = isPinchingNow;
+            }
+        }
+
+        // --- Interaction Engine (Unified for AR and Mouse) ---
+        
+        function handleInteraction(x, y, action) {
+            // Hide cursor temporarily to find element underneath
+            const displayObj = uiCursor.style.display;
+            uiCursor.style.display = 'none';
+            const elUnderCursor = document.elementFromPoint(x, y);
+            uiCursor.style.display = displayObj;
+
+            if (!elUnderCursor) return;
+
+            if (action === 'start') {
+                // 1. Check for standard clickable buttons
+                if (elUnderCursor.tagName === 'BUTTON' || elUnderCursor.closest('button')) {
+                    (elUnderCursor.closest('button') || elUnderCursor).click();
+                    return;
+                }
+                
+                // 2. Check for Stage 3 Table Rows
+                if (elUnderCursor.closest('.row-s3')) {
+                    elUnderCursor.closest('.row-s3').click();
+                    return;
+                }
+
+                // 3. Check for Draggable items (Stage 1)
+                const draggable = elUnderCursor.closest('.draggable');
+                if (draggable) {
+                    state.draggedElement = draggable;
+                    const rect = draggable.getBoundingClientRect();
+                    // Save original position if not saved
+                    if(draggable.dataset.originalX === "0") {
+                        draggable.dataset.originalX = rect.left;
+                        draggable.dataset.originalY = rect.top;
+                    }
+                    
+                    state.dragOffsetX = x - rect.left;
+                    state.dragOffsetY = y - rect.top;
+                    
+                    draggable.style.position = 'fixed';
+                    draggable.classList.add('is-dragged');
+                    // Move to cursor
+                    draggable.style.left = `${x - state.dragOffsetX}px`;
+                    draggable.style.top = `${y - state.dragOffsetY}px`;
+                }
+
+            } else if (action === 'move' && state.draggedElement) {
+                // Update position
+                state.draggedElement.style.left = `${x - state.dragOffsetX}px`;
+                state.draggedElement.style.top = `${y - state.dragOffsetY}px`;
+                
+            } else if (action === 'end' && state.draggedElement) {
+                // Check Drop
+                state.draggedElement.classList.remove('is-dragged');
+                
+                // Find dropzone under cursor
+                uiCursor.style.display = 'none';
+                state.draggedElement.style.pointerEvents = 'none'; // so we can see through it
+                const dropTarget = document.elementFromPoint(x, y);
+                state.draggedElement.style.pointerEvents = 'auto';
+                uiCursor.style.display = 'block';
+
+                const dropzone = dropTarget ? dropTarget.closest('#dropzone-s1') : null;
+
+                if (dropzone) {
+                    evaluateStage1Drop(state.draggedElement);
+                } else {
+                    // Snap back
+                    state.draggedElement.style.position = 'relative';
+                    state.draggedElement.style.left = 'auto';
+                    state.draggedElement.style.top = 'auto';
+                }
+                
+                state.draggedElement = null;
+            }
+        }
+
+        // Add Mouse Fallback event listeners
+        document.addEventListener('mousedown', (e) => { if(state.mode==='mouse') handleInteraction(e.clientX, e.clientY, 'start'); });
+        document.addEventListener('mousemove', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'move'); });
+        document.addEventListener('mouseup', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'end'); });
+        // Touch support
+        document.addEventListener('touchstart', (e) => { if(state.mode==='mouse') handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'start'); });
+        document.addEventListener('touchmove', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'move'); });
+        document.addEventListener('touchend', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.changedTouches[0].clientX, e.changedTouches[0].clientY, 'end'); });
+
+
+        // --- Stage Logics ---
+
+        // Stage 1 Logic
+        function evaluateStage1Drop(card) {
+            const isCorrect = card.dataset.correct === "true";
+            if (isCorrect) {
+                showNotif("ยอดเยี่ยม! เป็นคำถามที่วัดผลได้", true);
+                updateScore(15);
+                card.style.display = 'none'; // Remove card
+                // Check if all correct found (2 correct cards)
+                const remaining = document.querySelectorAll('.card-s1[data-correct="true"]:not([style*="display: none"])').length;
+                if(remaining === 0) {
+                    setTimeout(() => goToStage(2), 1500);
+                }
+            } else {
+                showNotif("คำถามนี้มีอคติ หรือไม่ตรงประเด็น ลองใหม่นะ", false);
+                updateScore(-5);
+                // Snap back
+                card.style.position = 'relative';
+                card.style.left = 'auto';
+                card.style.top = 'auto';
+            }
+        }
+
+        // Stage 2 Logic (Click to collect)
+        document.querySelectorAll('.btn-s2').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if(this.classList.contains('opacity-50')) return; // already clicked
+                
+                const isCorrect = this.dataset.correct === "true";
+                if(isCorrect) {
+                    this.classList.add('bg-green-500', 'text-white', 'opacity-50');
+                    showNotif("เก็บข้อมูลนี้แล้ว!", true);
+                    updateScore(10);
+                    state.s2Collected++;
+                    if(state.s2Collected >= 3) {
+                        setTimeout(() => goToStage(3), 1500);
+                    }
+                } else {
+                    this.classList.add('bg-red-500', 'text-white', 'opacity-50');
+                    showNotif("ข้อมูลนี้ไม่จำเป็น หรือละเมิดความเป็นส่วนตัว!", false);
+                    updateScore(-5);
+                }
+            });
+        });
+
+        // Stage 3 Logic (Click dirty rows)
+        document.querySelectorAll('.row-s3').forEach(row => {
+            row.addEventListener('click', function() {
+                if(this.classList.contains('line-through')) return;
+
+                if(this.dataset.error === "true") {
+                    this.classList.add('bg-red-900', 'line-through', 'opacity-50');
+                    showNotif("ตรวจพบข้อมูลผิดปกติ กำจัดทิ้ง!", true);
+                    updateScore(10);
+                    state.s3Removed++;
+                    if(state.s3Removed >= 3) { // 3 error rows
+                        setTimeout(() => goToStage(4), 1500);
+                    }
+                }
+            });
+        });
+
+        // Stage 4 Logic (Match Method)
+        document.querySelectorAll('.btn-s4').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const isCorrect = this.dataset.correct === "true";
+                if(isCorrect) {
+                    this.classList.add('bg-green-500', 'border-green-400');
+                    showNotif("วิเคราะห์ได้ตรงจุด!", true);
+                    updateScore(20);
+                    setTimeout(() => goToStage(5), 1500);
+                } else {
+                    this.classList.add('bg-red-500');
+                    showNotif("วิธีนี้ไม่ตอบโจทย์ ลองคิดใหม่", false);
+                    updateScore(-5);
+                    setTimeout(() => this.classList.remove('bg-red-500'), 1000);
+                }
+            });
+        });
+
+        // Stage 5 Logic (Select Chart)
+        document.querySelectorAll('.btn-s5').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const isCorrect = this.dataset.correct === "true";
+                if(isCorrect) {
+                    this.classList.add('bg-green-500', 'scale-105');
+                    showNotif("กราฟแท่งเปรียบเทียบเหมาะสมที่สุด!", true);
+                    updateScore(20);
+                    setTimeout(() => goToStage(6), 2000);
+                } else {
+                    this.classList.add('bg-red-500');
+                    showNotif("กราฟนี้อาจทำให้เปรียบเทียบยาก", false);
+                    updateScore(-5);
+                    setTimeout(() => this.classList.remove('bg-red-500'), 1000);
+                }
+            });
+        });
+
+        // Final Stage Logic (Order)
+        document.querySelectorAll('.btn-final').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if(this.classList.contains('hidden')) return;
+
+                const stepExpected = this.dataset.step;
+                
+                if(parseInt(stepExpected) === state.finalOrderIndex) {
+                    // Correct step
+                    const slot = document.getElementById(`slot-${state.finalOrderIndex}`);
+                    slot.innerHTML = this.innerHTML;
+                    slot.classList.replace('text-gray-400', 'text-green-400');
+                    slot.classList.replace('border-gray-400', 'border-green-400');
+                    slot.classList.replace('border-dashed', 'border-solid');
+                    
+                    this.classList.add('hidden');
+                    updateScore(10);
+                    showNotif("ถูกต้อง!", true);
+                    
+                    state.finalOrderIndex++;
+                    if(state.finalOrderIndex > 5) {
+                        updateScore(30); // Completion bonus
+                        setTimeout(() => goToStage(7), 2000);
+                    }
+                } else {
+                    showNotif("ลำดับยังไม่ถูกต้อง ลองนึกกระบวนการดีๆ", false);
+                    updateScore(-5);
+                }
+            });
+        });
+
+        // Summary Screen Logic
+        function showSummary() {
+            document.getElementById('final-score').innerText = state.score;
+            let rankText = "";
+            let rankClass = "";
+            
+            if(state.score >= 90) { rankText = "Data Scientist Master"; rankClass="bg-gradient-to-r from-yellow-400 to-orange-500 text-white"; }
+            else if(state.score >= 75) { rankText = "Data Analyst"; rankClass="bg-blue-500 text-white"; }
+            else if(state.score >= 60) { rankText = "Data Explorer"; rankClass="bg-green-500 text-white"; }
+            else { rankText = "Data Beginner"; rankClass="bg-gray-500 text-white"; }
+
+            const badge = document.getElementById('rank-badge');
+            badge.innerText = `ระดับ: ${rankText}`;
+            badge.className = `inline-block px-6 py-2 rounded-full text-2xl font-bold mt-2 shadow-lg ${rankClass}`;
+        }
+
+    </script>
+</body>
+</html>

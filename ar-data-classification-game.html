@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>AR เกม: การแยกแยะประเภทข้อมูล | ม.5</title>
+
+  <!-- ===== โหลด MediaPipe Hands ผ่าน CDN ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-dark: #0d0d1a;
+      --accent-quant: #00e5ff;   /* สีสำหรับข้อมูลเชิงปริมาณ */
+      --accent-qual:  #ff4da6;   /* สีสำหรับข้อมูลเชิงคุณภาพ */
+      --gold: #ffd700;
+      --white: #ffffff;
+      --panel-bg: rgba(13,13,26,0.88);
+      --radius: 16px;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg-dark);
+      font-family: 'Segoe UI', 'Noto Sans Thai', Arial, sans-serif;
+      color: var(--white);
+      touch-action: none;
+    }
+
+    /* ===== Canvas + Video Stack ===== */
+    #videoEl {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* กลับภาพกล้องหน้า */
+      z-index: 0;
+    }
+
+    #gameCanvas {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+
+    /* ===== Overlay Screens ===== */
+    .screen {
+      position: fixed; inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8,8,20,0.92);
+      padding: 24px;
+      text-align: center;
+      gap: 20px;
+    }
+
+    .screen.hidden { display: none; }
+
+    .screen-title {
+      font-size: clamp(1.8rem, 6vw, 3.2rem);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    .screen-sub {
+      font-size: clamp(0.9rem, 2.5vw, 1.15rem);
+      opacity: 0.75;
+      max-width: 520px;
+      line-height: 1.65;
+    }
+
+    /* ===== Legend Chips ===== */
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .chip-quant { background: rgba(0,229,255,0.15); border: 1.5px solid var(--accent-quant); color: var(--accent-quant); }
+    .chip-qual  { background: rgba(255,77,166,0.15); border: 1.5px solid var(--accent-qual);  color: var(--accent-qual); }
+
+    .chip-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .chip-quant .chip-dot { background: var(--accent-quant); }
+    .chip-qual  .chip-dot { background: var(--accent-qual); }
+
+    /* ===== Buttons ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px 36px;
+      border-radius: 999px;
+      border: none;
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00e5ff, #0070ff);
+      color: #000;
+      box-shadow: 0 0 24px rgba(0,229,255,0.45);
+    }
+
+    .btn-primary:hover { box-shadow: 0 0 36px rgba(0,229,255,0.7); }
+
+    /* ===== HUD (in-game UI) ===== */
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: linear-gradient(to bottom, rgba(8,8,20,0.82), transparent);
+      pointer-events: none;
+    }
+
+    #hud.hidden { display: none; }
+
+    .hud-score {
+      font-size: clamp(1.4rem, 4.5vw, 2rem);
+      font-weight: 900;
+      color: var(--gold);
+      text-shadow: 0 0 12px rgba(255,215,0,0.6);
+    }
+
+    .hud-label {
+      font-size: 0.7rem;
+      opacity: 0.6;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hud-target {
+      text-align: right;
+    }
+
+    .hud-progress {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .pip {
+      width: 18px; height: 18px;
+      border-radius: 4px;
+      border: 2px solid rgba(255,215,0,0.4);
+      background: transparent;
+      transition: background 0.2s;
+    }
+    .pip.filled { background: var(--gold); border-color: var(--gold); }
+
+    /* ===== Loading overlay ===== */
+    #loadingScreen {
+      position: fixed; inset: 0;
+      z-index: 20;
+      background: var(--bg-dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #loadingScreen.hidden { display: none; }
+
+    .spinner {
+      width: 52px; height: 52px;
+      border: 4px solid rgba(0,229,255,0.2);
+      border-top-color: var(--accent-quant);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== Win Screen extras ===== */
+    #winScreen .win-score {
+      font-size: clamp(3rem, 12vw, 7rem);
+      font-weight: 900;
+      color: var(--gold);
+      text-shadow: 0 0 40px rgba(255,215,0,0.6);
+      line-height: 1;
+    }
+
+    #winScreen .win-label {
+      font-size: clamp(0.8rem, 2vw, 1rem);
+      opacity: 0.55;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ===== Finger cursor hint ===== */
+    #fingerDot {
+      position: fixed;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: rgba(0,229,255,0.35);
+      border: 2.5px solid var(--accent-quant);
+      pointer-events: none;
+      z-index: 8;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.2s;
+      box-shadow: 0 0 14px rgba(0,229,255,0.5);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== Video / Canvas Layer ===== -->
+<video id="videoEl" playsinline autoplay muted></video>
+<canvas id="gameCanvas"></canvas>
+<div id="fingerDot"></div>
+
+<!-- ===== HUD (Score + Progress Pips) ===== -->
+<div id="hud" class="hidden">
+  <div>
+    <div class="hud-label">คะแนน</div>
+    <div class="hud-score" id="scoreDisplay">0</div>
+  </div>
+  <div id="pipRow" class="hud-progress"></div>
+  <div class="hud-target">
+    <div class="hud-label">เป้าหมาย</div>
+    <div style="font-size:1.1rem;font-weight:800;color:var(--accent-quant)">10 แต้ม</div>
+  </div>
+</div>
+
+<!-- ===== Loading Screen ===== -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <div style="font-size:1.1rem;opacity:0.7;">กำลังโหลด MediaPipe Hands…</div>
+</div>
+
+<!-- ===== Start Screen ===== -->
+<div id="startScreen" class="screen hidden">
+  <div class="screen-title">🖐️ AR<br>จัดประเภทข้อมูล</div>
+  <div class="screen-sub">
+    ใช้ <strong>นิ้วชี้</strong> แตะเฉพาะไอคอนที่เป็น<br>
+    <span style="color:var(--accent-quant);font-weight:700">ข้อมูลเชิงปริมาณ</span> สะสมให้ครบ 10 คะแนน
+  </div>
+  <div class="legend">
+    <div class="chip chip-quant"><span class="chip-dot"></span>ข้อมูลเชิงปริมาณ → แตะ ✅</div>
+    <div class="chip chip-qual"><span class="chip-dot"></span>ข้อมูลเชิงคุณภาพ → อย่าแตะ ❌</div>
+  </div>
+  <button class="btn btn-primary" id="startBtn">▶ เริ่มเกม</button>
+  <div style="font-size:0.75rem;opacity:0.4;">ต้องการอนุญาตใช้งานกล้อง</div>
+</div>
+
+<!-- ===== Win Screen ===== -->
+<div id="winScreen" class="screen hidden">
+  <div class="win-label">ยินดีด้วย!</div>
+  <div class="screen-title">🏆 คุณผ่านด่านแล้ว!</div>
+  <div class="win-score" id="finalScore">10</div>
+  <div class="win-label">คะแนนที่ได้</div>
+  <div class="screen-sub" style="opacity:0.6">คุณสามารถแยกแยะประเภทข้อมูลได้อย่างถูกต้อง!</div>
+  <button class="btn btn-primary" id="replayBtn">🔄 เล่นอีกครั้ง</button>
+</div>
+
+<script>
+/* =======================================================
+   AR เกม: การแยกแยะประเภทข้อมูล
+   วิทยาการคำนวณ ม.5
+   -------------------------------------------------------
+   ครูสามารถแก้ไขค่าตัวแปรในบล็อก "ตั้งค่าหลัก" ด้านล่างได้เลย
+   ======================================================= */
+
+// ============================================================
+// 🔧 ตั้งค่าหลัก — ครูแก้ไขได้ที่นี่
+// ============================================================
+const CONFIG = {
+  WIN_SCORE: 10,          // คะแนนที่ต้องสะสมเพื่อชนะ
+
+  // ความเร็วการตก (px ต่อเฟรม) — เพิ่มค่า = ตกเร็วขึ้น
+  SPEED_MIN: 1.8,
+  SPEED_MAX: 3.5,
+
+  // จำนวนวัตถุสูงสุดบนหน้าจอพร้อมกัน
+  MAX_ITEMS: 5,
+
+  // อัตราสร้างวัตถุใหม่ (มิลลิวินาที) — ลดค่า = สร้างถี่ขึ้น
+  SPAWN_INTERVAL_MS: 1400,
+
+  // สัดส่วนของข้อมูลเชิงปริมาณ (0–1) — 0.5 = 50/50
+  QUANT_RATIO: 0.52,
+
+  // ขนาดของวัตถุ (px)
+  ITEM_W: 160,
+  ITEM_H: 72,
+  ITEM_RADIUS: 18,
+
+  // รัศมีการแตะ (px) — เพิ่ม = ง่ายขึ้น
+  TAP_RADIUS: 48,
+};
+
+// ============================================================
+// 📚 คลังคำศัพท์ — ครูเพิ่ม/แก้ไขตัวอย่างได้ที่นี่
+// ============================================================
+const VOCAB = {
+  // ข้อมูลเชิงปริมาณ (ตัวเลข วัดได้ นับได้)
+  quantitative: [
+    { label: "📏 ส่วนสูง 175 ซม.", icon: "📏" },
+    { label: "⚖️ น้ำหนัก 65 กก.", icon: "⚖️" },
+    { label: "🌡️ อุณหภูมิ 37°C", icon: "🌡️" },
+    { label: "💧 ปริมาณน้ำฝน 120 มม.", icon: "💧" },
+    { label: "🏃 ความเร็ว 100 กม./ชม.", icon: "🏃" },
+    { label: "📐 พื้นที่ 50 ตร.ม.", icon: "📐" },
+    { label: "💰 ราคา ฿250", icon: "💰" },
+    { label: "🎂 อายุ 17 ปี", icon: "🎂" },
+    { label: "⏱️ เวลา 45 นาที", icon: "⏱️" },
+    { label: "📊 คะแนน 85/100", icon: "📊" },
+    { label: "🌍 ระยะทาง 2 กม.", icon: "🌍" },
+    { label: "📦 จำนวน 30 ชิ้น", icon: "📦" },
+  ],
+  // ข้อมูลเชิงคุณภาพ (คุณสมบัติ ระดับ หมวดหมู่)
+  qualitative: [
+    { label: "🎨 สีผม: ดำ", icon: "🎨" },
+    { label: "🧑 เพศ: หญิง", icon: "🧑" },
+    { label: "😊 ความรู้สึก: มีความสุข", icon: "😊" },
+    { label: "🌸 รสชาติ: หวาน", icon: "🌸" },
+    { label: "📍 ถิ่นที่อยู่: เหนือ", icon: "📍" },
+    { label: "🏫 ระดับ: ม.ปลาย", icon: "🏫" },
+    { label: "🐕 ชนิดสัตว์: สุนัข", icon: "🐕" },
+    { label: "💼 อาชีพ: นักเรียน", icon: "💼" },
+    { label: "⭐ ระดับ: ดีมาก", icon: "⭐" },
+    { label: "🏷️ ประเภท: ผักผลไม้", icon: "🏷️" },
+    { label: "🗣️ ภาษา: ไทย", icon: "🗣️" },
+    { label: "🌈 สี: แดง", icon: "🌈" },
+  ],
+};
+
+// ============================================================
+// 🔊 Web Audio — เสียงสังเคราะห์ (ไม่ต้องอัปโหลดไฟล์เสียง)
+// ============================================================
+let audioCtx;
+
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+/** เสียง "ปิ๊ง!" เมื่อตอบถูก */
+function playCorrect() {
+  const ac = getAudio();
+  const o = ac.createOscillator();
+  const g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.type = "sine";
+  o.frequency.setValueAtTime(880, ac.currentTime);
+  o.frequency.exponentialRampToValueAtTime(1320, ac.currentTime + 0.1);
+  g.gain.setValueAtTime(0.4, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
+  o.start(); o.stop(ac.currentTime + 0.25);
+}
+
+/** เสียง "ตื๊ด" เมื่อตอบผิด */
+function playWrong() {
+  const ac = getAudio();
+  const o = ac.createOscillator();
+  const g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.type = "sawtooth";
+  o.frequency.setValueAtTime(220, ac.currentTime);
+  o.frequency.exponentialRampToValueAtTime(110, ac.currentTime + 0.2);
+  g.gain.setValueAtTime(0.3, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
+  o.start(); o.stop(ac.currentTime + 0.25);
+}
+
+/** เสียง "ทาดา" เมื่อชนะ */
+function playWin() {
+  const ac = getAudio();
+  const notes = [523, 659, 784, 1047];
+  notes.forEach((freq, i) => {
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type = "triangle";
+    const t = ac.currentTime + i * 0.12;
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    o.start(t); o.stop(t + 0.4);
+  });
+  // เสียงปรบมือ (noise burst)
+  setTimeout(() => {
+    for (let i = 0; i < 6; i++) {
+      const buf = ac.createBuffer(1, ac.sampleRate * 0.06, ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let j = 0; j < d.length; j++) d[j] = Math.random() * 2 - 1;
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      const g2 = ac.createGain();
+      src.connect(g2); g2.connect(ac.destination);
+      const t2 = ac.currentTime + 0.55 + i * 0.14;
+      g2.gain.setValueAtTime(0.25, t2);
+      g2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.08);
+      src.start(t2);
+    }
+  }, 0);
+}
+
+// ============================================================
+// 🎮 Game State
+// ============================================================
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const videoEl = document.getElementById("videoEl");
+const hud = document.getElementById("hud");
+const scoreDisplay = document.getElementById("scoreDisplay");
+const pipRow = document.getElementById("pipRow");
+const fingerDot = document.getElementById("fingerDot");
+const startScreen = document.getElementById("startScreen");
+const winScreen = document.getElementById("winScreen");
+const loadingScreen = document.getElementById("loadingScreen");
+const finalScoreEl = document.getElementById("finalScore");
+
+let gameActive = false;
+let score = 0;
+let items = [];       // วัตถุที่กำลังตกอยู่บนหน้าจอ
+let spawnTimer = null;
+let fingerX = -999, fingerY = -999;
+let cooldown = false; // ป้องกันการแตะซ้ำเร็วเกินไป
+
+// ===== ปรับขนาด Canvas ให้ตรงกับหน้าจอ =====
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+// ============================================================
+// 🤚 MediaPipe Hands Setup
+// ============================================================
+let hands;
+
+function initHands() {
+  hands = new Hands({
+    locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 0,   // 0 = เร็ว, 1 = แม่น (ลดถ้าอุปกรณ์ช้า)
+    minDetectionConfidence: 0.65,
+    minTrackingConfidence: 0.55,
+  });
+
+  hands.onResults(onHandResults);
+}
+
+/** รับผลลัพธ์จาก MediaPipe แล้วแปลงตำแหน่งนิ้วชี้ */
+function onHandResults(results) {
+  if (!gameActive) return;
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    // landmark[8] = นิ้วชี้ (Index Finger Tip)
+    const tip = results.multiHandLandmarks[0][8];
+    // กล้องถูกกลับด้านแล้ว (scaleX(-1)) → ต้องกลับค่า x
+    fingerX = (1 - tip.x) * canvas.width;
+    fingerY = tip.y * canvas.height;
+
+    // แสดง dot ตำแหน่งนิ้ว
+    fingerDot.style.left = fingerX + "px";
+    fingerDot.style.top  = fingerY + "px";
+    fingerDot.style.opacity = "1";
+
+    // ตรวจการแตะ
+    checkTap();
+  } else {
+    fingerDot.style.opacity = "0";
+  }
+}
+
+// ============================================================
+// 🎲 Spawn Items
+// ============================================================
+function randomItem() {
+  const isQuant = Math.random() < CONFIG.QUANT_RATIO;
+  const pool = isQuant ? VOCAB.quantitative : VOCAB.qualitative;
+  const sample = pool[Math.floor(Math.random() * pool.length)];
+  const x = CONFIG.ITEM_W / 2 + Math.random() * (canvas.width - CONFIG.ITEM_W);
+
+  return {
+    label: sample.label,
+    icon: sample.icon,
+    isQuantitative: isQuant,
+    x,
+    y: -CONFIG.ITEM_H,    // เริ่มต้นเหนือหน้าจอ
+    // ความเร็วการตก — แก้ที่ CONFIG.SPEED_MIN / SPEED_MAX
+    speed: CONFIG.SPEED_MIN + Math.random() * (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN),
+    alive: true,
+    hitAnim: 0,           // ค่า animation เมื่อถูกแตะ (0 = ไม่มี)
+    wrongAnim: 0,
+  };
+}
+
+function spawnItem() {
+  if (!gameActive) return;
+  if (items.filter(i => i.alive).length < CONFIG.MAX_ITEMS) {
+    items.push(randomItem());
+  }
+}
+
+// ============================================================
+// 🎯 Tap Detection
+// ============================================================
+function checkTap() {
+  if (cooldown || !gameActive) return;
+
+  for (const item of items) {
+    if (!item.alive) continue;
+    const dx = fingerX - item.x;
+    const dy = fingerY - item.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < CONFIG.TAP_RADIUS + CONFIG.ITEM_W / 2) {
+      cooldown = true;
+      setTimeout(() => { cooldown = false; }, 300); // cooldown 300 ms
+
+      if (item.isQuantitative) {
+        // ✅ ถูกประเภท
+        score++;
+        updateHUD();
+        playCorrect();
+        item.hitAnim = 1;       // เล่น animation ถูก
+        setTimeout(() => { item.alive = false; }, 350);
+        if (score >= CONFIG.WIN_SCORE) {
+          setTimeout(triggerWin, 400);
+        }
+      } else {
+        // ❌ ผิดประเภท
+        playWrong();
+        item.wrongAnim = 1;     // เล่น animation ผิด
+        setTimeout(() => { item.alive = false; }, 350);
+      }
+      break;
+    }
+  }
+}
+
+// ============================================================
+// 🖼️ Draw Frame
+// ============================================================
+function drawItem(item) {
+  const W = CONFIG.ITEM_W, H = CONFIG.ITEM_H, R = CONFIG.ITEM_RADIUS;
+  const x = item.x - W / 2, y = item.y - H / 2;
+
+  ctx.save();
+
+  // === เอฟเฟกต์เมื่อถูกแตะถูก ===
+  if (item.hitAnim > 0) {
+    const scale = 1 + item.hitAnim * 0.3;
+    ctx.globalAlpha = 1 - item.hitAnim;
+    ctx.translate(item.x, item.y);
+    ctx.scale(scale, scale);
+    ctx.translate(-item.x, -item.y);
+    item.hitAnim += 0.06;
+  }
+
+  // === เอฟเฟกต์เมื่อถูกแตะผิด ===
+  if (item.wrongAnim > 0) {
+    const shake = Math.sin(item.wrongAnim * 60) * 8 * (1 - item.wrongAnim);
+    ctx.translate(shake, 0);
+    ctx.globalAlpha = 1 - item.wrongAnim;
+    item.wrongAnim += 0.06;
+  }
+
+  // กล่องพื้นหลัง
+  const color = item.isQuantitative ? "#00e5ff" : "#ff4da6";
+  const bgColor = item.isQuantitative
+    ? "rgba(0,50,80,0.82)"
+    : "rgba(80,0,50,0.82)";
+
+  // วาด rounded rect
+  ctx.beginPath();
+  ctx.moveTo(x + R, y);
+  ctx.lineTo(x + W - R, y);
+  ctx.quadraticCurveTo(x + W, y, x + W, y + R);
+  ctx.lineTo(x + W, y + H - R);
+  ctx.quadraticCurveTo(x + W, y + H, x + W - R, y + H);
+  ctx.lineTo(x + R, y + H);
+  ctx.quadraticCurveTo(x, y + H, x, y + H - R);
+  ctx.lineTo(x, y + R);
+  ctx.quadraticCurveTo(x, y, x + R, y);
+  ctx.closePath();
+
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Glow รอบกล่อง
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // ข้อความ
+  const fontSize = Math.min(14, W / item.label.length * 1.6);
+  ctx.font = `700 ${Math.max(12, fontSize)}px 'Noto Sans Thai', 'Segoe UI', Arial`;
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(item.label, item.x, item.y, W - 16);
+
+  // Badge ประเภท
+  ctx.font = "700 9px 'Segoe UI', Arial";
+  ctx.fillStyle = color;
+  ctx.globalAlpha *= 0.9;
+  const badge = item.isQuantitative ? "QUANTITATIVE" : "QUALITATIVE";
+  ctx.fillText(badge, item.x, y + H - 10);
+
+  ctx.restore();
+}
+
+function gameLoop() {
+  if (!gameActive) return;
+
+  // เคลียร์ canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // อัปเดตและวาดวัตถุ
+  for (const item of items) {
+    if (!item.alive) continue;
+
+    // เลื่อนตำแหน่งลงตามความเร็ว
+    if (item.hitAnim === 0 && item.wrongAnim === 0) {
+      item.y += item.speed;
+    }
+
+    // ลบออกถ้าตกพ้นหน้าจอ
+    if (item.y > canvas.height + CONFIG.ITEM_H) {
+      item.alive = false;
+    }
+
+    drawItem(item);
+  }
+
+  // ทำความสะอาด items ที่ตายแล้ว
+  items = items.filter(i => i.alive || i.hitAnim > 0 || i.wrongAnim > 0);
+
+  // วาดครอสแฮร์ที่นิ้วชี้
+  if (fingerX > 0) {
+    ctx.beginPath();
+    ctx.arc(fingerX, fingerY, CONFIG.TAP_RADIUS * 0.6, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,229,255,0.5)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============================================================
+// 📊 HUD
+// ============================================================
+function buildPips() {
+  pipRow.innerHTML = "";
+  for (let i = 0; i < CONFIG.WIN_SCORE; i++) {
+    const pip = document.createElement("div");
+    pip.className = "pip";
+    pip.id = "pip-" + i;
+    pipRow.appendChild(pip);
+  }
+}
+
+function updateHUD() {
+  scoreDisplay.textContent = score;
+  for (let i = 0; i < CONFIG.WIN_SCORE; i++) {
+    const pip = document.getElementById("pip-" + i);
+    if (pip) pip.classList.toggle("filled", i < score);
+  }
+}
+
+// ============================================================
+// 🚀 Game Flow
+// ============================================================
+async function startGame() {
+  loadingScreen.classList.remove("hidden");
+  startScreen.classList.add("hidden");
+
+  try {
+    // ขอสิทธิ์กล้อง
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    videoEl.srcObject = stream;
+    await new Promise(r => videoEl.onloadedmetadata = r);
+    videoEl.play();
+
+    // โหลด MediaPipe
+    initHands();
+    const camera = new Camera(videoEl, {
+      onFrame: async () => {
+        if (hands) await hands.send({ image: videoEl });
+      },
+      width: 1280, height: 720,
+    });
+    await camera.start();
+
+    // เริ่มเกม
+    score = 0;
+    items = [];
+    gameActive = true;
+    buildPips();
+    updateHUD();
+    hud.classList.remove("hidden");
+    loadingScreen.classList.add("hidden");
+
+    spawnItem(); // spawn แรก
+    spawnTimer = setInterval(spawnItem, CONFIG.SPAWN_INTERVAL_MS);
+    requestAnimationFrame(gameLoop);
+  } catch (err) {
+    loadingScreen.classList.add("hidden");
+    startScreen.classList.remove("hidden");
+    alert("ไม่สามารถเข้าถึงกล้องได้: " + err.message);
+  }
+}
+
+function triggerWin() {
+  gameActive = false;
+  clearInterval(spawnTimer);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  items = [];
+  hud.classList.add("hidden");
+  fingerDot.style.opacity = "0";
+  finalScoreEl.textContent = score;
+  winScreen.classList.remove("hidden");
+  playWin();
+}
+
+function replayGame() {
+  winScreen.classList.add("hidden");
+  score = 0;
+  items = [];
+  gameActive = true;
+  buildPips();
+  updateHUD();
+  hud.classList.remove("hidden");
+  clearInterval(spawnTimer);
+  spawnTimer = setInterval(spawnItem, CONFIG.SPAWN_INTERVAL_MS);
+  requestAnimationFrame(gameLoop);
+}
+
+// ============================================================
+// 🖱️ Event Listeners
+// ============================================================
+document.getElementById("startBtn").addEventListener("click", () => startGame());
+document.getElementById("replayBtn").addEventListener("click", () => replayGame());
+
+// ============================================================
+// ⏳ Init — รอโหลด MediaPipe แล้วแสดงหน้าเริ่ม
+// ============================================================
+window.addEventListener("load", () => {
+  // รอสักครู่ให้ script โหลด แล้วเปิดหน้าเริ่ม
+  setTimeout(() => {
+    loadingScreen.classList.add("hidden");
+    startScreen.classList.remove("hidden");
+  }, 1200);
+});
+</script>
+</body>
+</html>

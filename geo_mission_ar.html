@@ -544,10 +544,6 @@
         let offsetX = 0, offsetY = 0;
         let useMouseFallback = true; // Auto enable mouse
 
-        let targetCursorX = window.innerWidth / 2;
-        let targetCursorY = window.innerHeight / 2;
-        const smoothingFactor = 0.4; // ยิ่งน้อยยิ่งนุ่ม แต่จะตามมือช้าลง (0.1 - 1.0)
-
         // Setup Hands
         const hands = new Hands({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
@@ -566,7 +562,8 @@
             onFrame: async () => {
                 await hands.send({image: videoElement});
             },
-            facingMode: 'user' // บังคับใช้กล้องหน้าเสมอ (จำเป็นสำหรับมือถือ/แท็บเล็ต)
+            width: 1280,
+            height: 720
         });
 
         // Initialize Camera silently
@@ -600,36 +597,18 @@
                 const indexTip = landmarks[8];
                 const thumbTip = landmarks[4];
 
-                // 1. คำนวณ Aspect Ratio เพื่อแก้ปัญหาความแม่นยำจาก object-fit: cover
-                const videoRatio = videoElement.videoWidth / videoElement.videoHeight;
-                const screenRatio = window.innerWidth / window.innerHeight;
-                
-                let renderWidth, renderHeight, camOffsetX = 0, camOffsetY = 0;
+                // Screen mapping (Mirrored X)
+                cursorX = (1 - indexTip.x) * window.innerWidth;
+                cursorY = indexTip.y * window.innerHeight;
 
-                if (screenRatio > videoRatio) {
-                    // จอกว้างกว่าวิดีโอ (ตัดขอบบน-ล่าง)
-                    renderWidth = window.innerWidth;
-                    renderHeight = window.innerWidth / videoRatio;
-                    camOffsetY = (renderHeight - window.innerHeight) / 2;
-                } else {
-                    // จอสูงกว่าวิดีโอ (ตัดขอบซ้าย-ขวา เช่น บนมือถือ)
-                    renderHeight = window.innerHeight;
-                    renderWidth = window.innerHeight * videoRatio;
-                    camOffsetX = (renderWidth - window.innerWidth) / 2;
-                }
-
-                // 2. แมปพิกัด MediaPipe เข้ากับหน้าจอจริง (หักลบส่วนที่ถูก Crop)
-                targetCursorX = (1 - indexTip.x) * renderWidth - camOffsetX;
-                targetCursorY = indexTip.y * renderHeight - camOffsetY;
-
-                // 3. ตรวจจับการจีบนิ้วให้แม่นยำขึ้น (ใช้แกน Z ด้วย)
+                // Pinch detection (distance between thumb and index)
                 const distance = Math.sqrt(
                     Math.pow(indexTip.x - thumbTip.x, 2) + 
-                    Math.pow(indexTip.y - thumbTip.y, 2) +
-                    Math.pow(indexTip.z - thumbTip.z, 2) // เพิ่มมิติความลึก (Z)
+                    Math.pow(indexTip.y - thumbTip.y, 2)
                 );
 
-                isPinching = distance < 0.08; // ปรับค่า Threshold ให้เหมาะกับ 3D (0.06 - 0.08)
+                isPinching = distance < 0.05; // Threshold
+                updateInteraction();
             }
         }
 
@@ -949,12 +928,7 @@
 
         // Ensure cursor updates smoothly via animation frame
         function loop() {
-            if (!useMouseFallback) {
-                // Linear Interpolation (Lerp) ลดอาการสั่นของมือ
-                cursorX += (targetCursorX - cursorX) * smoothingFactor;
-                cursorY += (targetCursorY - cursorY) * smoothingFactor;
-                updateInteraction();
-            }
+            // Optional: smooth interpolation for mouse/hand could go here
             requestAnimationFrame(loop);
         }
         loop();

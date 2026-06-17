@@ -18,11 +18,35 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+
         body {
             font-family: 'Noto Sans Thai', sans-serif;
             overflow: hidden; /* ป้องกันการ Scroll */
             background-color: #0f172a;
             user-select: none;
+            -webkit-user-select: none;
+        }
+
+        main > div {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        button,
+        .btn-s2,
+        .btn-s4,
+        .btn-s5,
+        .btn-final,
+        .row-s3,
+        .draggable {
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         /* Glassmorphism Effect */
@@ -42,7 +66,7 @@
 
         /* AR Cursor */
         #ar-cursor {
-            position: absolute;
+            position: fixed;
             width: 24px;
             height: 24px;
             background-color: rgba(56, 189, 248, 0.8);
@@ -110,6 +134,27 @@
         #notification {
             transition: opacity 0.3s, transform 0.3s;
         }
+
+        @media (max-width: 768px) {
+            #app { padding: 0.5rem; }
+            #status-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.75rem;
+                padding: 0.75rem;
+            }
+            #status-bar > div {
+                justify-content: space-between;
+            }
+            #screen-intro {
+                width: calc(100% - 1rem);
+                padding: 1.25rem;
+                gap: 1rem;
+            }
+            #screen-intro h1 { font-size: 2.25rem; }
+            #screen-intro h2 { font-size: 1.5rem; }
+            #screen-stage5 .btn-s5 { padding: 1rem; }
+        }
     </style>
 </head>
 <body class="text-white cyber-bg">
@@ -173,7 +218,7 @@
                     รับบทนักวิทยาการข้อมูลรุ่นเยาว์ ช่วยโรงเรียนวิเคราะห์ข้อมูลการมาสายของนักเรียน ผ่านกระบวนการ 5 ขั้นตอน โดยใช้ <b>มือของคุณ</b> ควบคุมผ่านกล้อง Webcam
                 </p>
                 
-                <div class="grid grid-cols-2 gap-4 w-full max-w-lg mt-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg mt-8">
                     <button onclick="startGame(true)" class="bg-blue-600 hover:bg-blue-500 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/50 transition-all hover:scale-105 border border-blue-400">
                         📹 เริ่มเกม (เปิดกล้อง AR)
                     </button>
@@ -198,7 +243,7 @@
                 </div>
 
                 <!-- Draggable Cards -->
-                <div class="grid grid-cols-2 gap-6 w-full max-w-4xl mt-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl mt-8">
                     <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="false" data-original-x="0" data-original-y="0">
                         นักเรียนคนใดนิสัยไม่ดีถึงมาสาย?
                     </div>
@@ -312,8 +357,8 @@
                     <p class="text-lg">"ขั้นสุดท้าย! <b>การสื่อสารและทำผลลัพธ์ให้เป็นภาพ</b> เราพบว่าเด็กนั่งรถเมล์มาสายเยอะสุด จะนำเสนอด้วยกราฟแบบไหนให้ ผอ. เข้าใจง่ายที่สุด?"</p>
                 </div>
 
-                <div class="grid grid-cols-2 gap-8 w-full max-w-4xl mt-8">
-                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" data-correct="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl mt-8">
+                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" role="button" tabindex="0" data-correct="true">
                         <div class="w-48 h-32 bg-white/10 rounded flex items-end justify-center gap-2 p-4">
                             <div class="w-8 bg-blue-400 h-1/3"></div>
                             <div class="w-8 bg-blue-400 h-2/3"></div>
@@ -323,7 +368,7 @@
                         <p class="mt-4 text-xl font-bold">กราฟแท่งเปรียบเทียบ</p>
                     </div>
                     
-                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" data-correct="false">
+                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" role="button" tabindex="0" data-correct="false">
                         <div class="w-32 h-32 rounded-full border-8 border-t-blue-400 border-r-green-400 border-b-yellow-400 border-l-purple-400"></div>
                         <p class="mt-4 text-xl font-bold">กราฟวงกลม (สัดส่วน)</p>
                     </div>
@@ -404,9 +449,15 @@
             s3Removed: 0,
             finalOrderIndex: 1,
             isPinching: false,
+            pinchCandidate: false,
+            pinchStableFrames: 0,
+            pointerX: null,
+            pointerY: null,
+            missingHandFrames: 0,
             draggedElement: null,
             dragOffsetX: 0,
-            dragOffsetY: 0
+            dragOffsetY: 0,
+            activePointerId: null
         };
 
         const stageInfo = [
@@ -425,31 +476,60 @@
         const notif = document.getElementById('notification');
         const notifContent = document.getElementById('notif-content');
         const scoreDisplay = document.getElementById('score-display');
+        const cameraStatus = document.getElementById('camera-status');
         const camDot = document.getElementById('cam-dot');
         const camPing = document.getElementById('cam-ping');
         const camText = document.getElementById('cam-text');
 
         // --- Core Functions ---
 
-        function startGame(useAR) {
+        async function startGame(useAR) {
             state.mode = useAR ? 'ar' : 'mouse';
-            
+            document.getElementById('status-bar').classList.remove('hidden');
+
             if (useAR) {
-                initMediaPipe();
-                uiCursor.style.display = 'block';
-                camDot.classList.replace('bg-red-500', 'bg-green-500');
-                camPing.classList.replace('bg-red-400', 'bg-green-400');
-                camText.innerText = 'AR ทำงานแล้ว';
-                camText.classList.replace('text-red-400', 'text-green-400');
+                setCameraStatus('loading', 'กำลังเปิดกล้อง...');
+                const started = await initMediaPipe();
+                if (started) {
+                    uiCursor.style.display = 'block';
+                    setCameraStatus('ready', 'AR พร้อมใช้งาน');
+                } else {
+                    state.mode = 'mouse';
+                    uiCursor.style.display = 'none';
+                    setCameraStatus('mouse', 'เปิดกล้องไม่ได้ / ใช้เมาส์หรือสัมผัสแทน');
+                    showNotif('ไม่สามารถเปิดกล้องได้ ระบบเปลี่ยนเป็นโหมดเมาส์/สัมผัส', false);
+                }
             } else {
-                camDot.classList.replace('bg-red-500', 'bg-gray-500');
-                camPing.classList.add('hidden');
-                camText.innerText = 'ใช้เมาส์เล่น';
-                camText.classList.replace('text-red-400', 'text-gray-400');
+                uiCursor.style.display = 'none';
+                setCameraStatus('mouse', 'ใช้เมาส์ / สัมผัสหน้าจอ');
             }
 
-            document.getElementById('status-bar').classList.remove('hidden');
             goToStage(1);
+        }
+
+        function setCameraStatus(type, text) {
+            camText.innerText = text;
+            cameraStatus.className = 'flex items-center gap-2 px-3 py-1 rounded-full text-sm';
+            camDot.className = 'relative inline-flex rounded-full h-3 w-3';
+            camPing.className = 'absolute inline-flex h-full w-full rounded-full opacity-75';
+
+            if (type === 'ready') {
+                cameraStatus.classList.add('text-green-400', 'bg-green-400/20');
+                camDot.classList.add('bg-green-500');
+                camPing.classList.add('animate-ping', 'bg-green-400');
+            } else if (type === 'loading') {
+                cameraStatus.classList.add('text-yellow-300', 'bg-yellow-400/20');
+                camDot.classList.add('bg-yellow-400');
+                camPing.classList.add('animate-ping', 'bg-yellow-300');
+            } else if (type === 'searching') {
+                cameraStatus.classList.add('text-orange-300', 'bg-orange-400/20');
+                camDot.classList.add('bg-orange-400');
+                camPing.classList.add('animate-ping', 'bg-orange-300');
+            } else {
+                cameraStatus.classList.add('text-gray-300', 'bg-gray-400/20');
+                camDot.classList.add('bg-gray-500');
+                camPing.classList.add('hidden', 'bg-gray-400');
+            }
         }
 
         function goToStage(stageNum) {
@@ -483,155 +563,309 @@
 
         // --- AR & MediaPipe System ---
         let hands, camera;
+        const arRuntime = {
+            processingFrame: false,
+            lastStatusAt: 0
+        };
 
-        function initMediaPipe() {
+        async function initMediaPipe() {
             const videoElement = document.getElementById('webcam');
-            
-            hands = new Hands({locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }});
-            
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6
-            });
-            
-            hands.onResults(onARResults);
-            
-            camera = new Camera(videoElement, {
-                onFrame: async () => {
-                    await hands.send({image: videoElement});
-                },
-                width: 640,
-                height: 480
-            });
-            camera.start();
+
+            try {
+                hands = new Hands({ locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }});
+
+                const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: isMobile ? 0 : 1,
+                    minDetectionConfidence: 0.72,
+                    minTrackingConfidence: 0.72
+                });
+
+                hands.onResults(onARResults);
+
+                camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        if (arRuntime.processingFrame) return;
+                        arRuntime.processingFrame = true;
+                        try {
+                            await hands.send({ image: videoElement });
+                        } catch (error) {
+                            console.warn('MediaPipe frame skipped:', error);
+                        } finally {
+                            arRuntime.processingFrame = false;
+                        }
+                    },
+                    width: isMobile ? 640 : 960,
+                    height: isMobile ? 480 : 540
+                });
+
+                await camera.start();
+                return true;
+            } catch (error) {
+                console.error('Camera / MediaPipe error:', error);
+                return false;
+            }
+        }
+
+        function distance2D(a, b) {
+            return Math.hypot(a.x - b.x, a.y - b.y);
+        }
+
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(max, value));
+        }
+
+        function landmarkToScreen(landmark) {
+            const videoElement = document.getElementById('webcam');
+            const rect = videoElement.getBoundingClientRect();
+            const videoWidth = videoElement.videoWidth || 640;
+            const videoHeight = videoElement.videoHeight || 480;
+            const videoAspect = videoWidth / videoHeight;
+            const screenAspect = rect.width / rect.height;
+
+            let drawWidth = rect.width;
+            let drawHeight = rect.height;
+            let offsetX = rect.left;
+            let offsetY = rect.top;
+
+            // Match CSS object-fit: cover so cursor position aligns on phones/tablets/desktop.
+            if (screenAspect > videoAspect) {
+                drawWidth = rect.width;
+                drawHeight = rect.width / videoAspect;
+                offsetY = rect.top + (rect.height - drawHeight) / 2;
+            } else {
+                drawHeight = rect.height;
+                drawWidth = rect.height * videoAspect;
+                offsetX = rect.left + (rect.width - drawWidth) / 2;
+            }
+
+            const x = offsetX + (1 - landmark.x) * drawWidth; // Mirror X to match selfie video.
+            const y = offsetY + landmark.y * drawHeight;
+            return {
+                x: clamp(x, 0, window.innerWidth - 1),
+                y: clamp(y, 0, window.innerHeight - 1)
+            };
+        }
+
+        function smoothPointer(rawX, rawY) {
+            const alpha = state.draggedElement ? 0.46 : 0.34;
+            state.pointerX = state.pointerX === null ? rawX : state.pointerX + (rawX - state.pointerX) * alpha;
+            state.pointerY = state.pointerY === null ? rawY : state.pointerY + (rawY - state.pointerY) * alpha;
+            return { x: state.pointerX, y: state.pointerY };
+        }
+
+        function readPinchState(landmarks) {
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const indexMcp = landmarks[5];
+            const pinkyMcp = landmarks[17];
+            const wrist = landmarks[0];
+            const middleMcp = landmarks[9];
+
+            const palmWidth = Math.max(distance2D(indexMcp, pinkyMcp), distance2D(wrist, middleMcp), 0.06);
+            const pinchRatio = distance2D(thumbTip, indexTip) / palmWidth;
+
+            // Hysteresis: start pinch at a smaller ratio, release only when clearly open.
+            const nextCandidate = state.isPinching ? pinchRatio < 0.64 : pinchRatio < 0.44;
+            if (nextCandidate === state.pinchCandidate) {
+                state.pinchStableFrames++;
+            } else {
+                state.pinchCandidate = nextCandidate;
+                state.pinchStableFrames = 1;
+            }
+
+            return state.pinchStableFrames >= 2 ? state.pinchCandidate : state.isPinching;
+        }
+
+        function resetARGesture() {
+            if (state.isPinching && state.draggedElement && state.pointerX !== null && state.pointerY !== null) {
+                handleInteraction(state.pointerX, state.pointerY, 'end');
+            }
+            state.isPinching = false;
+            state.pinchCandidate = false;
+            state.pinchStableFrames = 0;
+            uiCursor.classList.remove('pinching');
         }
 
         function onARResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                
-                // Index finger tip (8)
-                const indexX = (1 - landmarks[8].x) * window.innerWidth; // Mirror X
-                const indexY = landmarks[8].y * window.innerHeight;
-                
-                // Thumb tip (4)
-                const thumbX = (1 - landmarks[4].x) * window.innerWidth;
-                const thumbY = landmarks[4].y * window.innerHeight;
-
-                // Move visual cursor
-                uiCursor.style.left = `${indexX}px`;
-                uiCursor.style.top = `${indexY}px`;
-
-                // Calculate pinch distance
-                const dist = Math.hypot(indexX - thumbX, indexY - thumbY);
-                const isPinchingNow = dist < 50; // Threshold
-
-                if (isPinchingNow && !state.isPinching) {
-                    // Pinch Started (Click/Grab)
-                    uiCursor.classList.add('pinching');
-                    handleInteraction(indexX, indexY, 'start');
-                } else if (!isPinchingNow && state.isPinching) {
-                    // Pinch Ended (Release)
-                    uiCursor.classList.remove('pinching');
-                    handleInteraction(indexX, indexY, 'end');
-                } else if (isPinchingNow && state.isPinching) {
-                    // Pinch Move (Drag)
-                    handleInteraction(indexX, indexY, 'move');
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                state.missingHandFrames++;
+                if (state.missingHandFrames > 5) {
+                    resetARGesture();
+                    if (Date.now() - arRuntime.lastStatusAt > 1000) {
+                        setCameraStatus('searching', 'ไม่พบมือ / วางมือให้อยู่ในกรอบกล้อง');
+                        arRuntime.lastStatusAt = Date.now();
+                    }
                 }
-
-                state.isPinching = isPinchingNow;
+                return;
             }
+
+            state.missingHandFrames = 0;
+            if (Date.now() - arRuntime.lastStatusAt > 1000) {
+                setCameraStatus('ready', 'AR พร้อมใช้งาน');
+                arRuntime.lastStatusAt = Date.now();
+            }
+
+            const landmarks = results.multiHandLandmarks[0];
+            const indexScreen = landmarkToScreen(landmarks[8]);
+            const pointer = smoothPointer(indexScreen.x, indexScreen.y);
+
+            uiCursor.style.left = `${pointer.x}px`;
+            uiCursor.style.top = `${pointer.y}px`;
+
+            const isPinchingNow = readPinchState(landmarks);
+
+            if (isPinchingNow && !state.isPinching) {
+                uiCursor.classList.add('pinching');
+                handleInteraction(pointer.x, pointer.y, 'start');
+            } else if (!isPinchingNow && state.isPinching) {
+                uiCursor.classList.remove('pinching');
+                handleInteraction(pointer.x, pointer.y, 'end');
+            } else if (isPinchingNow && state.isPinching) {
+                handleInteraction(pointer.x, pointer.y, 'move');
+            }
+
+            state.isPinching = isPinchingNow;
         }
 
-        // --- Interaction Engine (Unified for AR and Mouse) ---
-        
+        // --- Interaction Engine (Unified for AR, Mouse, Touch, Stylus) ---
+        const CLICKABLE_SELECTOR = 'button, .btn-s2, .btn-s4, .btn-s5, .btn-final, .row-s3, [role="button"]';
+
+        function elementAtPointSafe(x, y, options = {}) {
+            const safeX = clamp(x, 0, window.innerWidth - 1);
+            const safeY = clamp(y, 0, window.innerHeight - 1);
+            const oldCursorVisibility = uiCursor.style.visibility;
+            const oldDraggedPointerEvents = state.draggedElement ? state.draggedElement.style.pointerEvents : null;
+
+            uiCursor.style.visibility = 'hidden';
+            if (options.ignoreDragged && state.draggedElement) {
+                state.draggedElement.style.pointerEvents = 'none';
+            }
+
+            const element = document.elementFromPoint(safeX, safeY);
+
+            if (options.ignoreDragged && state.draggedElement) {
+                state.draggedElement.style.pointerEvents = oldDraggedPointerEvents || 'auto';
+            }
+            uiCursor.style.visibility = oldCursorVisibility;
+            return element;
+        }
+
+        function startDrag(element, x, y) {
+            state.draggedElement = element;
+            const rect = element.getBoundingClientRect();
+
+            state.dragOffsetX = x - rect.left;
+            state.dragOffsetY = y - rect.top;
+
+            element.style.width = `${rect.width}px`;
+            element.style.position = 'fixed';
+            element.style.left = `${rect.left}px`;
+            element.style.top = `${rect.top}px`;
+            element.classList.add('is-dragged');
+            moveDrag(x, y);
+        }
+
+        function moveDrag(x, y) {
+            if (!state.draggedElement) return;
+            state.draggedElement.style.left = `${x - state.dragOffsetX}px`;
+            state.draggedElement.style.top = `${y - state.dragOffsetY}px`;
+        }
+
+        function resetDraggedElement(element) {
+            element.classList.remove('is-dragged');
+            element.style.position = 'relative';
+            element.style.left = 'auto';
+            element.style.top = 'auto';
+            element.style.width = 'auto';
+            element.style.pointerEvents = 'auto';
+        }
+
         function handleInteraction(x, y, action) {
-            // Hide cursor temporarily to find element underneath
-            const displayObj = uiCursor.style.display;
-            uiCursor.style.display = 'none';
-            const elUnderCursor = document.elementFromPoint(x, y);
-            uiCursor.style.display = displayObj;
+            if (action === 'move') {
+                moveDrag(x, y);
+                return;
+            }
 
-            if (!elUnderCursor) return;
+            if (action === 'end') {
+                if (!state.draggedElement) return;
+                const dragged = state.draggedElement;
+                dragged.classList.remove('is-dragged');
 
-            if (action === 'start') {
-                // 1. Check for standard clickable buttons
-                if (elUnderCursor.tagName === 'BUTTON' || elUnderCursor.closest('button')) {
-                    (elUnderCursor.closest('button') || elUnderCursor).click();
-                    return;
-                }
-                
-                // 2. Check for Stage 3 Table Rows
-                if (elUnderCursor.closest('.row-s3')) {
-                    elUnderCursor.closest('.row-s3').click();
-                    return;
-                }
-
-                // 3. Check for Draggable items (Stage 1)
-                const draggable = elUnderCursor.closest('.draggable');
-                if (draggable) {
-                    state.draggedElement = draggable;
-                    const rect = draggable.getBoundingClientRect();
-                    // Save original position if not saved
-                    if(draggable.dataset.originalX === "0") {
-                        draggable.dataset.originalX = rect.left;
-                        draggable.dataset.originalY = rect.top;
-                    }
-                    
-                    state.dragOffsetX = x - rect.left;
-                    state.dragOffsetY = y - rect.top;
-                    
-                    draggable.style.position = 'fixed';
-                    draggable.classList.add('is-dragged');
-                    // Move to cursor
-                    draggable.style.left = `${x - state.dragOffsetX}px`;
-                    draggable.style.top = `${y - state.dragOffsetY}px`;
-                }
-
-            } else if (action === 'move' && state.draggedElement) {
-                // Update position
-                state.draggedElement.style.left = `${x - state.dragOffsetX}px`;
-                state.draggedElement.style.top = `${y - state.dragOffsetY}px`;
-                
-            } else if (action === 'end' && state.draggedElement) {
-                // Check Drop
-                state.draggedElement.classList.remove('is-dragged');
-                
-                // Find dropzone under cursor
-                uiCursor.style.display = 'none';
-                state.draggedElement.style.pointerEvents = 'none'; // so we can see through it
-                const dropTarget = document.elementFromPoint(x, y);
-                state.draggedElement.style.pointerEvents = 'auto';
-                uiCursor.style.display = 'block';
-
+                const dropTarget = elementAtPointSafe(x, y, { ignoreDragged: true });
                 const dropzone = dropTarget ? dropTarget.closest('#dropzone-s1') : null;
 
                 if (dropzone) {
-                    evaluateStage1Drop(state.draggedElement);
+                    evaluateStage1Drop(dragged);
                 } else {
-                    // Snap back
-                    state.draggedElement.style.position = 'relative';
-                    state.draggedElement.style.left = 'auto';
-                    state.draggedElement.style.top = 'auto';
+                    resetDraggedElement(dragged);
                 }
-                
                 state.draggedElement = null;
+                return;
+            }
+
+            const elUnderCursor = elementAtPointSafe(x, y);
+            if (!elUnderCursor) return;
+
+            // Drag cards must be detected before generic clickable elements.
+            const draggable = elUnderCursor.closest('.draggable');
+            if (draggable) {
+                startDrag(draggable, x, y);
+                return;
+            }
+
+            const clickable = elUnderCursor.closest(CLICKABLE_SELECTOR);
+            if (clickable) {
+                clickable.click();
             }
         }
 
-        // Add Mouse Fallback event listeners
-        document.addEventListener('mousedown', (e) => { if(state.mode==='mouse') handleInteraction(e.clientX, e.clientY, 'start'); });
-        document.addEventListener('mousemove', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'move'); });
-        document.addEventListener('mouseup', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'end'); });
-        // Touch support
-        document.addEventListener('touchstart', (e) => { if(state.mode==='mouse') handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'start'); });
-        document.addEventListener('touchmove', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'move'); });
-        document.addEventListener('touchend', (e) => { if(state.mode==='mouse' && state.draggedElement) handleInteraction(e.changedTouches[0].clientX, e.changedTouches[0].clientY, 'end'); });
+        function bindPointerControls() {
+            const target = document.getElementById('app');
 
+            if (window.PointerEvent) {
+                target.addEventListener('pointerdown', (e) => {
+                    if (state.mode === 'ar') return;
+                    e.preventDefault();
+                    state.activePointerId = e.pointerId;
+                    target.setPointerCapture?.(e.pointerId);
+                    handleInteraction(e.clientX, e.clientY, 'start');
+                }, { passive: false });
+
+                target.addEventListener('pointermove', (e) => {
+                    if (state.mode === 'ar' || state.activePointerId !== e.pointerId) return;
+                    e.preventDefault();
+                    handleInteraction(e.clientX, e.clientY, 'move');
+                }, { passive: false });
+
+                target.addEventListener('pointerup', (e) => {
+                    if (state.mode === 'ar' || state.activePointerId !== e.pointerId) return;
+                    e.preventDefault();
+                    handleInteraction(e.clientX, e.clientY, 'end');
+                    target.releasePointerCapture?.(e.pointerId);
+                    state.activePointerId = null;
+                }, { passive: false });
+
+                target.addEventListener('pointercancel', (e) => {
+                    if (state.mode === 'ar') return;
+                    if (state.draggedElement) handleInteraction(e.clientX, e.clientY, 'end');
+                    state.activePointerId = null;
+                });
+            } else {
+                // Legacy fallback for very old browsers.
+                document.addEventListener('mousedown', (e) => { if(state.mode !== 'ar') handleInteraction(e.clientX, e.clientY, 'start'); });
+                document.addEventListener('mousemove', (e) => { if(state.mode !== 'ar' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'move'); });
+                document.addEventListener('mouseup', (e) => { if(state.mode !== 'ar' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'end'); });
+                document.addEventListener('touchstart', (e) => { if(state.mode !== 'ar') { e.preventDefault(); handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'start'); } }, { passive: false });
+                document.addEventListener('touchmove', (e) => { if(state.mode !== 'ar' && state.draggedElement) { e.preventDefault(); handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'move'); } }, { passive: false });
+                document.addEventListener('touchend', (e) => { if(state.mode !== 'ar' && state.draggedElement) handleInteraction(e.changedTouches[0].clientX, e.changedTouches[0].clientY, 'end'); });
+            }
+        }
+
+        bindPointerControls();
 
         // --- Stage Logics ---
 
@@ -650,10 +884,7 @@
             } else {
                 showNotif("คำถามนี้มีอคติ หรือไม่ตรงประเด็น ลองใหม่นะ", false);
                 updateScore(-5);
-                // Snap back
-                card.style.position = 'relative';
-                card.style.left = 'auto';
-                card.style.top = 'auto';
+                resetDraggedElement(card);
             }
         }
 
@@ -699,8 +930,10 @@
         // Stage 4 Logic (Match Method)
         document.querySelectorAll('.btn-s4').forEach(btn => {
             btn.addEventListener('click', function() {
+                if(this.dataset.locked === 'true') return;
                 const isCorrect = this.dataset.correct === "true";
                 if(isCorrect) {
+                    this.dataset.locked = 'true';
                     this.classList.add('bg-green-500', 'border-green-400');
                     showNotif("วิเคราะห์ได้ตรงจุด!", true);
                     updateScore(20);
@@ -717,8 +950,10 @@
         // Stage 5 Logic (Select Chart)
         document.querySelectorAll('.btn-s5').forEach(btn => {
             btn.addEventListener('click', function() {
+                if(this.dataset.locked === 'true') return;
                 const isCorrect = this.dataset.correct === "true";
                 if(isCorrect) {
+                    this.dataset.locked = 'true';
                     this.classList.add('bg-green-500', 'scale-105');
                     showNotif("กราฟแท่งเปรียบเทียบเหมาะสมที่สุด!", true);
                     updateScore(20);
@@ -728,6 +963,16 @@
                     showNotif("กราฟนี้อาจทำให้เปรียบเทียบยาก", false);
                     updateScore(-5);
                     setTimeout(() => this.classList.remove('bg-red-500'), 1000);
+                }
+            });
+        });
+
+        // Keyboard accessibility for graph cards in Stage 5
+        document.querySelectorAll('.btn-s5[role="button"]').forEach(card => {
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.click();
                 }
             });
         });

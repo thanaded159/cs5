@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geo Mission AR: ภารกิจนักวิเคราะห์แผนที่ GIS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f172a; /* Slate 900 */
+            user-select: none;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        
+        .glass-button {
+            background: rgba(14, 165, 233, 0.2); /* Sky blue */
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(14, 165, 233, 0.5);
+            transition: all 0.3s ease;
+        }
+        .glass-button:hover {
+            background: rgba(14, 165, 233, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.5);
+        }
+
+        /* Video Background */
+        #webcam-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror */
+            z-index: -2;
+            opacity: 0.4; /* Dim video to make UI pop */
+        }
+
+        /* Digital Map Grid Background */
+        .map-grid {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: 
+                linear-gradient(rgba(14, 165, 233, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(14, 165, 233, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* AR Cursor */
+        #ar-cursor {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #0ea5e9;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 9999;
+            transition: width 0.1s, height 0.1s, background-color 0.1s;
+            box-shadow: 0 0 10px #0ea5e9;
+            display: none;
+        }
+        #ar-cursor.pinching {
+            width: 20px;
+            height: 20px;
+            background-color: rgba(14, 165, 233, 0.8);
+            border-color: #38bdf8;
+            box-shadow: 0 0 20px #38bdf8;
+        }
+
+        /* Screens */
+        .screen {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0; left: 0;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* Draggable Items */
+        .draggable {
+            cursor: grab;
+            transition: transform 0.1s;
+        }
+        .draggable.dragging {
+            opacity: 0.8;
+            transform: scale(1.1);
+            z-index: 50;
+        }
+
+        /* Map Layers Simulation */
+        .map-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #e2e8f0; /* Map base color */
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .map-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            transition: opacity 0.3s;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .map-layer.active {
+            opacity: 1;
+        }
+
+        /* Mockup Map Elements */
+        .river-line { background: #3b82f6; height: 100%; width: 20px; position: absolute; left: 60%; transform: skewX(-20deg); }
+        .road-line { background: #64748b; height: 10px; width: 100%; position: absolute; top: 40%; }
+        .road-line-2 { background: #64748b; height: 100%; width: 10px; position: absolute; left: 30%; }
+        .flood-zone { background: rgba(59, 130, 246, 0.4); width: 40%; height: 100%; position: absolute; right: 0; top:0; }
+        .community-zone { background: rgba(245, 158, 11, 0.4); width: 120px; height: 120px; border-radius: 50%; position: absolute; left: 25%; top: 35%; transform: translate(-50%, -50%); border: 2px dashed #d97706; }
+        .hospital-point { color: #ef4444; font-size: 24px; position: absolute; left: 70%; top: 20%; text-shadow: 0 0 5px white;}
+        .school-point { color: #8b5cf6; font-size: 24px; position: absolute; left: 20%; top: 60%; text-shadow: 0 0 5px white;}
+
+        /* Target Points */
+        .target-point {
+            position: absolute;
+            width: 40px; height: 40px;
+            background: rgba(255,255,255,0.8);
+            border: 3px solid #333;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; color: #333;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        
+        .toast {
+            position: absolute;
+            top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Camera Feed & AR Setup -->
+    <video id="webcam-video" autoplay playsinline></video>
+    <div class="map-grid"></div>
+    <div id="ar-cursor"></div>
+
+    <!-- HUD Overlay (Always visible during game) -->
+    <div id="hud" class="hidden absolute top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-40">
+        <div class="glass-panel px-4 py-2 rounded-lg pointer-events-auto">
+            <span class="text-gray-300 text-sm">ผู้ช่วย: GeoBot</span>
+            <div id="geobot-message" class="text-white text-lg font-semibold text-cyan-300">เริ่มภารกิจได้เลย!</div>
+        </div>
+        <div class="glass-panel px-6 py-2 rounded-lg text-center flex flex-col pointer-events-auto">
+            <span class="text-gray-300 text-sm">คะแนนรวม</span>
+            <span id="score-display" class="text-2xl font-bold text-yellow-400">0</span>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast bg-green-500 text-white shadow-lg">ถูกต้อง! +10 คะแนน</div>
+
+    <!-- ================= SCREENS ================= -->
+
+    <!-- Screen: Start -->
+    <div id="screen-start" class="screen active flex-col justify-center items-center">
+        <div class="glass-panel p-10 rounded-2xl max-w-2xl text-center relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500 rounded-full blur-3xl opacity-20"></div>
+            <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500 rounded-full blur-3xl opacity-20"></div>
+            
+            <h1 class="text-5xl font-bold text-white mb-2 tracking-wide">Geo Mission <span class="text-cyan-400">AR</span></h1>
+            <h2 class="text-2xl text-gray-300 mb-8">ภารกิจนักวิเคราะห์แผนที่ GIS</h2>
+            
+            <p class="text-gray-200 mb-8 text-lg">
+                รับบทนักวิเคราะห์ GIS ใช้มือของคุณควบคุมชั้นข้อมูล ซ้อนทับ และวิเคราะห์พื้นที่เพื่อช่วยเหลือชุมชน<br>
+                <span class="text-sm text-yellow-300 mt-2 block">*ใช้กล้อง Webcam จับการเคลื่อนไหวมือ (จีบนิ้วเพื่อหยิบ/คลิก) หรือใช้เมาส์คลิกและลากได้*</span>
+            </p>
+
+            <div id="camera-status" class="text-cyan-300 mb-4 animate-pulse">กำลังเตรียมระบบตรวจจับมือ...</div>
+
+            <button id="btn-start" class="glass-button text-white font-bold py-3 px-8 rounded-full text-xl opacity-50 cursor-not-allowed" disabled>
+                เข้าสู่ระบบ / เริ่มเกม
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Tutorial -->
+    <div id="screen-tutorial" class="screen flex-col justify-center items-center">
+        <div class="glass-panel p-8 rounded-2xl w-3/4 max-w-3xl text-center">
+            <h2 class="text-3xl font-bold text-white mb-4">ฝึกการควบคุม</h2>
+            <p class="text-cyan-200 text-xl mb-6">วิธีที่ 1: เลื่อนมือให้ตรงเป้าหมาย แล้ว <span class="font-bold text-yellow-300">"จีบนิ้วโป้งกับนิ้วชี้"</span> เพื่อหยิบและลาก<br>
+                วิธีที่ 2: ใช้เมาส์ คลิกค้างแล้วลาก
+            </p>
+            
+            <div class="relative w-full h-64 bg-black/30 rounded-xl border border-gray-600 mb-6 overflow-hidden" id="tutorial-area">
+                <!-- Draggable Box -->
+                <div id="tut-drag" class="draggable interactive-btn absolute left-10 top-20 w-24 h-24 bg-cyan-500 rounded-lg flex items-center justify-center text-white font-bold cursor-pointer shadow-[0_0_15px_#06b6d4]">
+                    ลากฉัน
+                </div>
+                <!-- Target Zone -->
+                <div id="tut-drop" class="dropzone absolute right-10 top-16 w-32 h-32 border-4 border-dashed border-yellow-400 rounded-lg flex items-center justify-center text-yellow-400 font-bold bg-yellow-400/10">
+                    วางที่นี่
+                </div>
+            </div>
+            
+            <button onclick="nextLevel('screen-level1', 1)" class="glass-button interactive-btn text-white font-bold py-2 px-6 rounded-full hidden" id="btn-tut-next">
+                เริ่มภารกิจที่ 1
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Level 1 (Layer Types) -->
+    <div id="screen-level1" class="screen flex-col justify-center items-center pt-16">
+        <div class="glass-panel p-6 rounded-2xl w-11/12 max-w-5xl h-[80vh] flex flex-col">
+            <div class="text-center mb-4">
+                <h2 class="text-3xl font-bold text-white">ด่านที่ 1: เปิดโลกแผนที่ GIS</h2>
+                <p class="text-cyan-200">ลากการ์ดชั้นข้อมูลด้านล่าง ไปใส่ในประเภทของข้อมูลพื้นที่ให้ถูกต้อง</p>
+            </div>
+
+            <!-- Drop Zones -->
+            <div class="flex justify-around mb-8 flex-1">
+                <div class="dropzone w-1/4 glass-panel border-cyan-400 flex flex-col items-center p-4 rounded-xl relative" data-type="point">
+                    <h3 class="text-xl font-bold text-cyan-300 mb-2">ข้อมูลจุด (Point)</h3>
+                    <p class="text-sm text-gray-400 mb-4 text-center">สถานที่เฉพาะเจาะจง</p>
+                    <!-- dropped items go here visually -->
+                </div>
+                <div class="dropzone w-1/4 glass-panel border-green-400 flex flex-col items-center p-4 rounded-xl relative" data-type="line">
+                    <h3 class="text-xl font-bold text-green-300 mb-2">ข้อมูลเส้น (Line)</h3>
+                    <p class="text-sm text-gray-400 mb-4 text-center">สิ่งที่มีความยาว</p>
+                </div>
+                <div class="dropzone w-1/4 glass-panel border-purple-400 flex flex-col items-center p-4 rounded-xl relative" data-type="polygon">
+                    <h3 class="text-xl font-bold text-purple-300 mb-2">ข้อมูลพื้นที่ (Polygon)</h3>
+                    <p class="text-sm text-gray-400 mb-4 text-center">บริเวณที่มีขอบเขต</p>
+                </div>
+            </div>
+
+            <!-- Draggable Items -->
+            <div class="flex justify-center flex-wrap gap-4 relative h-32" id="lv1-items">
+                <div class="draggable interactive-btn glass-button px-6 py-3 rounded-lg text-white font-bold absolute" style="left:10%; top:0;" data-answer="line">ถนน</div>
+                <div class="draggable interactive-btn glass-button px-6 py-3 rounded-lg text-white font-bold absolute" style="left:25%; top:20px;" data-answer="point">โรงเรียน</div>
+                <div class="draggable interactive-btn glass-button px-6 py-3 rounded-lg text-white font-bold absolute" style="left:40%; top:0;" data-answer="polygon">ชุมชน</div>
+                <div class="draggable interactive-btn glass-button px-6 py-3 rounded-lg text-white font-bold absolute" style="left:55%; top:20px;" data-answer="line">แม่น้ำ</div>
+                <div class="draggable interactive-btn glass-button px-6 py-3 rounded-lg text-white font-bold absolute" style="left:70%; top:0;" data-answer="polygon">พื้นที่น้ำท่วม</div>
+                <div class="draggable interactive-btn glass-button px-6 py-3 rounded-lg text-white font-bold absolute" style="left:85%; top:20px;" data-answer="point">โรงพยาบาล</div>
+            </div>
+            
+            <button onclick="nextLevel('screen-level2', 2)" class="glass-button interactive-btn text-white font-bold py-2 px-6 rounded-full self-center hidden mt-2" id="btn-lv1-next">
+                ไปด่านต่อไป
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Level 2 (Symbols) -->
+    <div id="screen-level2" class="screen flex-col justify-center items-center pt-16">
+        <div class="glass-panel p-6 rounded-2xl w-11/12 max-w-5xl h-[80vh] flex flex-col">
+            <div class="text-center mb-4">
+                <h2 class="text-3xl font-bold text-white">ด่านที่ 2: ถอดรหัสสัญลักษณ์</h2>
+                <p class="text-cyan-200">ลากสัญลักษณ์บนแผนที่ ไปวางในช่องความหมาย (Legend) ให้ถูกต้อง</p>
+            </div>
+
+            <div class="flex flex-1 gap-8 relative" id="lv2-container">
+                <!-- Symbols to drag -->
+                <div class="w-1/3 flex flex-col gap-6 items-center border-r border-gray-600 pr-4 relative">
+                    <div class="draggable interactive-btn w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center absolute" style="top:10%; left:20%;" data-sym="river">
+                        <div class="w-10 h-2 bg-white skew-x-12"></div>
+                    </div>
+                    <div class="draggable interactive-btn w-16 h-16 bg-gray-500 rounded flex items-center justify-center absolute" style="top:40%; left:50%;" data-sym="road">
+                        <div class="w-full h-2 bg-white"></div>
+                    </div>
+                    <div class="draggable interactive-btn w-16 h-16 bg-white rounded-full border-4 border-red-500 flex items-center justify-center absolute" style="top:70%; left:30%; text-red-500 font-bold text-2xl" data-sym="hospital">
+                        +
+                    </div>
+                </div>
+
+                <!-- Descriptions (Drop Zones) -->
+                <div class="w-2/3 flex flex-col gap-4 justify-center pl-4">
+                    <div class="flex items-center gap-4">
+                        <div class="dropzone w-20 h-20 border-2 border-dashed border-gray-400 bg-white/5 rounded-lg flex justify-center items-center" data-sym="hospital"></div>
+                        <span class="text-white text-xl">= โรงพยาบาล (Hospital)</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="dropzone w-20 h-20 border-2 border-dashed border-gray-400 bg-white/5 rounded-lg flex justify-center items-center" data-sym="river"></div>
+                        <span class="text-white text-xl">= แม่น้ำ (River)</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="dropzone w-20 h-20 border-2 border-dashed border-gray-400 bg-white/5 rounded-lg flex justify-center items-center" data-sym="road"></div>
+                        <span class="text-white text-xl">= ถนนหลัก (Main Road)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="nextLevel('screen-level3', 3)" class="glass-button interactive-btn text-white font-bold py-2 px-6 rounded-full self-center hidden mt-2" id="btn-lv2-next">
+                ไปด่านต่อไป
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Level 3 & 4 Combined (Overlay & Spatial Analysis) -->
+    <div id="screen-level3" class="screen flex-col justify-center items-center pt-16">
+        <div class="glass-panel p-4 rounded-2xl w-11/12 max-w-6xl h-[85vh] flex gap-4">
+            
+            <!-- Side Panel: Layers -->
+            <div class="w-1/3 flex flex-col gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-white" id="l3-title">ด่านที่ 3: ซ้อนชั้นข้อมูล</h2>
+                    <p class="text-cyan-200 text-sm mb-2" id="l3-desc">ภารกิจ: หาพื้นที่ตั้ง "ศูนย์อพยพชั่วคราว"<br>เงื่อนไข: ต้องไม่อยู่ในเขตน้ำท่วม, ใกล้ถนน, ใกล้ชุมชน<br><span class="text-yellow-400">เปิดชั้นข้อมูลที่จำเป็นเท่านั้น!</span></p>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto space-y-2 pr-2">
+                    <!-- Toggles -->
+                    <label class="flex items-center gap-3 glass-panel p-3 rounded-lg cursor-pointer hover:bg-white/10 transition">
+                        <input type="checkbox" class="layer-toggle interactive-btn w-5 h-5" value="road">
+                        <span class="text-white font-semibold">L01: ถนนหลัก (เส้น)</span>
+                    </label>
+                    <label class="flex items-center gap-3 glass-panel p-3 rounded-lg cursor-pointer hover:bg-white/10 transition">
+                        <input type="checkbox" class="layer-toggle interactive-btn w-5 h-5" value="river">
+                        <span class="text-white font-semibold">L02: แม่น้ำ (เส้น)</span>
+                    </label>
+                    <label class="flex items-center gap-3 glass-panel p-3 rounded-lg cursor-pointer hover:bg-white/10 transition">
+                        <input type="checkbox" class="layer-toggle interactive-btn w-5 h-5" value="community">
+                        <span class="text-white font-semibold">L03: ชุมชน (พื้นที่)</span>
+                    </label>
+                    <label class="flex items-center gap-3 glass-panel p-3 rounded-lg cursor-pointer hover:bg-white/10 transition">
+                        <input type="checkbox" class="layer-toggle interactive-btn w-5 h-5" value="flood">
+                        <span class="text-white font-semibold">L06: พื้นที่น้ำท่วม (พื้นที่)</span>
+                    </label>
+                    <label class="flex items-center gap-3 glass-panel p-3 rounded-lg cursor-pointer hover:bg-white/10 transition">
+                        <input type="checkbox" class="layer-toggle interactive-btn w-5 h-5" value="color">
+                        <span class="text-white font-semibold">สีประจำตำบล (ไม่จำเป็น)</span>
+                    </label>
+                </div>
+
+                <button id="btn-check-layer" class="glass-button interactive-btn text-white font-bold py-3 rounded-lg" onclick="checkLevel3()">
+                    ยืนยันการเลือกชั้นข้อมูล
+                </button>
+            </div>
+
+            <!-- Map View -->
+            <div class="w-2/3 bg-gray-200 rounded-xl relative overflow-hidden border-2 border-gray-500" id="map-view">
+                <!-- Map Base -->
+                <div class="absolute inset-0 bg-[#e2e8f0]"></div>
+                
+                <!-- Layers (Controlled by JS) -->
+                <div id="layer-color" class="map-layer bg-purple-200/50"></div>
+                <div id="layer-community" class="map-layer"><div class="community-zone"></div></div>
+                <div id="layer-river" class="map-layer"><div class="river-line"></div></div>
+                <div id="layer-road" class="map-layer"><div class="road-line"></div><div class="road-line-2"></div></div>
+                <div id="layer-flood" class="map-layer"><div class="flood-zone"></div></div>
+                
+                <!-- Targets for Level 4 (Hidden initially) -->
+                <div id="lv4-targets" class="absolute inset-0 hidden pointer-events-none">
+                    <!-- A: Flood + Road -->
+                    <div class="target-point dropzone" data-point="A" style="left: 80%; top: 40%;">A</div>
+                    <!-- B: No Road, Safe -->
+                    <div class="target-point dropzone" data-point="B" style="left: 10%; top: 15%;">B</div>
+                    <!-- C: Road + Safe + Community (CORRECT) -->
+                    <div class="target-point dropzone" data-point="C" style="left: 30%; top: 40%; border-color: green;">C</div>
+                    <!-- D: Near River -->
+                    <div class="target-point dropzone" data-point="D" style="left: 55%; top: 70%;">D</div>
+
+                    <!-- Draggable Pin -->
+                    <div id="analysis-pin" class="draggable interactive-btn absolute w-8 h-12 bg-red-500 pointer-events-auto cursor-grab" style="left: 50%; top: 90%; clip-path: polygon(50% 100%, 0 0, 100% 0);">
+                        <div class="w-4 h-4 bg-white rounded-full mx-auto mt-1"></div>
+                    </div>
+                </div>
+
+                <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 text-xs text-gray-700 rounded">มาตราส่วน 1:50,000</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen: Final Mission -->
+    <div id="screen-final" class="screen flex-col justify-center items-center pt-16">
+        <div class="glass-panel p-6 rounded-2xl w-11/12 max-w-5xl h-[80vh] flex flex-col text-center">
+            <h2 class="text-4xl font-bold text-yellow-400 mb-4 shadow-black drop-shadow-md">FINAL MISSION: เมืองปลอดภัยด้วย GIS</h2>
+            <p class="text-white text-lg mb-6">
+                ภารกิจ: เลือกพื้นที่ตั้ง "ศูนย์บริการประชาชน"<br>
+                เงื่อนไข: ใกล้ชุมชน, ใกล้ถนนหลัก, ไม่อยู่ในพื้นที่น้ำท่วม<br>
+                (ข้อมูลถูกเปิดไว้ให้ทั้งหมดแล้ว ลากหมุดไปวางจุดที่เหมาะสมที่สุด)
+            </p>
+
+            <div class="flex-1 bg-[#cbd5e1] rounded-xl relative overflow-hidden border-4 border-cyan-500 shadow-[0_0_20px_#0ea5e9]">
+                <!-- Composite Map -->
+                <div class="community-zone" style="left: 70%; top: 60%; width: 150px; height: 150px;"></div>
+                <div class="river-line" style="left: 30%; transform: skewX(10deg);"></div>
+                <div class="road-line" style="top: 60%;"></div>
+                <div class="road-line-2" style="left: 70%;"></div>
+                <div class="flood-zone" style="width: 40%; left: 0;"></div>
+                
+                <div class="school-point" style="left: 75%; top: 55%;">🏫</div>
+
+                <!-- Targets -->
+                <div class="target-point dropzone" data-point="A" style="left: 20%; top: 60%;">A</div> <!-- Flooded, Road -->
+                <div class="target-point dropzone" data-point="B" style="left: 80%; top: 20%;">B</div> <!-- Far from road -->
+                <div class="target-point dropzone" data-point="C" style="left: 45%; top: 30%;">C</div> <!-- Far from community -->
+                <div class="target-point dropzone" data-point="D" style="left: 70%; top: 60%; border-color: gold;">D</div> <!-- PERFECT -->
+
+                <div id="final-pin" class="draggable interactive-btn absolute w-10 h-14 bg-yellow-400 pointer-events-auto cursor-grab shadow-lg flex items-center justify-center font-bold text-xl" style="left: 50%; top: 85%; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;">
+                    📍
+                </div>
+            </div>
+            
+            <button onclick="checkFinal()" class="glass-button interactive-btn text-white font-bold py-3 px-8 rounded-full self-center mt-4 text-xl">
+                ยืนยันการวิเคราะห์
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Result -->
+    <div id="screen-result" class="screen flex-col justify-center items-center">
+        <div class="glass-panel p-10 rounded-2xl max-w-2xl text-center w-3/4">
+            <h1 class="text-5xl font-bold text-white mb-2">สรุปผลภารกิจ</h1>
+            
+            <div class="my-8">
+                <p class="text-gray-300 text-xl mb-2">คะแนนที่ได้</p>
+                <div class="text-7xl font-bold text-yellow-400 drop-shadow-lg" id="final-score">0</div>
+                <p class="text-2xl text-cyan-300 font-bold mt-4" id="rank-text">GIS Master</p>
+                <p class="text-gray-300 mt-2" id="rank-desc">ยอดเยี่ยม ใช้ข้อมูลภูมิศาสตร์วิเคราะห์พื้นที่ได้อย่างเป็นระบบ</p>
+            </div>
+
+            <div class="text-left bg-black/30 p-4 rounded-lg mb-8 text-gray-200 text-sm leading-relaxed">
+                <span class="font-bold text-cyan-300">สรุปความรู้:</span> GIS (ระบบสารสนเทศภูมิศาสตร์) คือเครื่องมือจัดเก็บ แสดงผล ซ้อนทับ และวิเคราะห์ข้อมูลเชิงพื้นที่ ช่วยให้เราตัดสินใจเลือกพื้นที่ได้อย่างแม่นยำและลดความเสี่ยงจากภัยพิบัติ
+            </div>
+
+            <button onclick="location.reload()" class="glass-button interactive-btn text-white font-bold py-3 px-8 rounded-full text-xl">
+                เล่นอีกครั้ง
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ================= GAME STATE & CONFIG =================
+        let score = 0;
+        let currentLevel = 0; // 0=Start, 1=Tut, 2=Lv1, 3=Lv2, 4=Lv3, 5=Lv4, 6=Final
+        const TOTAL_SCORE = 100;
+        
+        const UI = {
+            geobotMsg: document.getElementById('geobot-message'),
+            scoreDisp: document.getElementById('score-display'),
+            hud: document.getElementById('hud'),
+            cursor: document.getElementById('ar-cursor')
+        };
+
+        function updateGeobot(msg) {
+            UI.geobotMsg.textContent = msg;
+            UI.geobotMsg.parentElement.classList.add('animate-pulse-fast');
+            setTimeout(() => UI.geobotMsg.parentElement.classList.remove('animate-pulse-fast'), 1000);
+        }
+
+        function addScore(points, reason = "") {
+            score += points;
+            UI.scoreDisp.textContent = score;
+            showToast(`+${points} ${reason}`);
+        }
+
+        function deductScore(points, reason = "") {
+            score -= points;
+            if(score < 0) score = 0;
+            UI.scoreDisp.textContent = score;
+            showToast(`-${points} ${reason}`, 'bg-red-500');
+        }
+
+        function showToast(msg, bgClass = 'bg-green-500') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast text-white shadow-lg ${bgClass}`;
+            toast.style.opacity = '1';
+            toast.style.top = '80px';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.top = '20px';
+            }, 2000);
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function nextLevel(screenId, levelNum) {
+            showScreen(screenId);
+            currentLevel = levelNum;
+            if (levelNum > 0) UI.hud.classList.remove('hidden');
+
+            switch(levelNum) {
+                case 1: updateGeobot("ด่าน 1: แยกประเภทข้อมูล (จุด, เส้น, พื้นที่)"); break;
+                case 2: updateGeobot("ด่าน 2: จับคู่สัญลักษณ์ให้ตรงกับความหมาย"); break;
+                case 3: updateGeobot("ด่าน 3: เลือกเปิดเฉพาะข้อมูลที่จำเป็น!"); break;
+                case 4: updateGeobot("ด่าน 4: ลากหมุดไปวางที่จุด A,B,C หรือ D"); break;
+                case 5: updateGeobot("Final Mission: เลือกจุดที่ปลอดภัยและดีที่สุด!"); break;
+            }
+        }
+
+        // ================= MEDIAPIPE & AR CURSOR CONTROL =================
+        const videoElement = document.getElementById('webcam-video');
+        const cameraStatus = document.getElementById('camera-status');
+        const btnStart = document.getElementById('btn-start');
+        
+        let cursorX = window.innerWidth / 2;
+        let cursorY = window.innerHeight / 2;
+        let isPinching = false;
+        let wasPinching = false;
+        let draggedItem = null;
+        let offsetX = 0, offsetY = 0;
+        let useMouseFallback = true; // Auto enable mouse
+
+        // Setup Hands
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+        
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+
+        // Initialize Camera silently
+        camera.start().then(() => {
+            cameraStatus.textContent = "✅ ตรวจพบกล้องและพร้อมใช้งาน";
+            cameraStatus.classList.remove('animate-pulse', 'text-cyan-300');
+            cameraStatus.classList.add('text-green-400');
+            btnStart.disabled = false;
+            btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+            UI.cursor.style.display = 'block';
+        }).catch(err => {
+            cameraStatus.textContent = "⚠️ ไม่พบกล้อง (ใช้เมาส์เล่นได้)";
+            cameraStatus.classList.remove('animate-pulse');
+            cameraStatus.classList.add('text-yellow-400');
+            btnStart.disabled = false;
+            btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+            UI.cursor.style.display = 'block';
+            console.warn("Camera init failed, fallback to mouse.", err);
+        });
+
+        btnStart.addEventListener('click', () => {
+            nextLevel('screen-tutorial', 0);
+            updateGeobot("ลองหยิบกล่องสี่เหลี่ยมไปวางในกรอบเส้นประดูสิ!");
+        });
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                useMouseFallback = false; // Disable mouse auto-update if hands detected
+                
+                const landmarks = results.multiHandLandmarks[0];
+                const indexTip = landmarks[8];
+                const thumbTip = landmarks[4];
+
+                // Screen mapping (Mirrored X)
+                cursorX = (1 - indexTip.x) * window.innerWidth;
+                cursorY = indexTip.y * window.innerHeight;
+
+                // Pinch detection (distance between thumb and index)
+                const distance = Math.sqrt(
+                    Math.pow(indexTip.x - thumbTip.x, 2) + 
+                    Math.pow(indexTip.y - thumbTip.y, 2)
+                );
+
+                isPinching = distance < 0.05; // Threshold
+                updateInteraction();
+            }
+        }
+
+        // ================= MOUSE FALLBACK =================
+        document.addEventListener('mousemove', (e) => {
+            if(useMouseFallback) {
+                cursorX = e.clientX;
+                cursorY = e.clientY;
+                updateInteraction();
+            }
+        });
+        document.addEventListener('mousedown', () => { if(useMouseFallback) { isPinching = true; updateInteraction(); } });
+        document.addEventListener('mouseup', () => { if(useMouseFallback) { isPinching = false; updateInteraction(); } });
+        // Touch fallback
+        document.addEventListener('touchmove', (e) => {
+            if(useMouseFallback) {
+                cursorX = e.touches[0].clientX;
+                cursorY = e.touches[0].clientY;
+                updateInteraction();
+            }
+        });
+        document.addEventListener('touchstart', () => { if(useMouseFallback) { isPinching = true; updateInteraction(); } });
+        document.addEventListener('touchend', () => { if(useMouseFallback) { isPinching = false; updateInteraction(); } });
+
+
+        // ================= INTERACTION LOGIC (Virtual Cursor) =================
+        function updateInteraction() {
+            // Update visual cursor
+            UI.cursor.style.left = `${cursorX}px`;
+            UI.cursor.style.top = `${cursorY}px`;
+            
+            if (isPinching) {
+                UI.cursor.classList.add('pinching');
+            } else {
+                UI.cursor.classList.remove('pinching');
+            }
+
+            // Logic: Pinch Start (Grab)
+            if (isPinching && !wasPinching) {
+                // Find element under cursor. Temporarily hide cursor to prevent it blocking the raycast
+                UI.cursor.style.display = 'none';
+                let el = document.elementFromPoint(cursorX, cursorY);
+                UI.cursor.style.display = 'block';
+
+                if (el) {
+                    // Bubble up to find interactive elements
+                    let interactive = el.closest('.interactive-btn');
+                    if (interactive) {
+                        // Click simple buttons/checkboxes
+                        if (interactive.tagName === 'BUTTON' || interactive.tagName === 'INPUT') {
+                            interactive.click();
+                        } 
+                        // Start Dragging
+                        else if (interactive.classList.contains('draggable')) {
+                            draggedItem = interactive;
+                            draggedItem.classList.add('dragging');
+                            
+                            // Calculate offset so it doesn't snap to center of cursor
+                            const rect = draggedItem.getBoundingClientRect();
+                            offsetX = cursorX - rect.left;
+                            offsetY = cursorY - rect.top;
+                            
+                            // Make absolute relative to parent
+                            const parentRect = draggedItem.parentElement.getBoundingClientRect();
+                            if(draggedItem.parentElement !== document.body) {
+                                offsetX += parentRect.left;
+                                offsetY += parentRect.top;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Logic: Dragging
+            if (isPinching && draggedItem) {
+                let parentRect = draggedItem.parentElement.getBoundingClientRect();
+                let newLeft = cursorX - offsetX;
+                let newTop = cursorY - offsetY;
+                
+                // Keep within parent roughly
+                draggedItem.style.left = `${newLeft}px`;
+                draggedItem.style.top = `${newTop}px`;
+            }
+
+            // Logic: Pinch Release (Drop)
+            if (!isPinching && wasPinching) {
+                if (draggedItem) {
+                    draggedItem.classList.remove('dragging');
+                    handleDrop(draggedItem);
+                    draggedItem = null;
+                }
+            }
+
+            wasPinching = isPinching;
+        }
+
+        // ================= GAME MECHANICS & LEVEL LOGIC =================
+        
+        // --- Collision Helper ---
+        function checkOverlap(rect1, rect2) {
+            return !(rect1.right < rect2.left || 
+                     rect1.left > rect2.right || 
+                     rect1.bottom < rect2.top || 
+                     rect1.top > rect2.bottom);
+        }
+
+        // --- Drop Handler ---
+        let lv1Correct = 0;
+        let lv2Correct = 0;
+
+        function handleDrop(item) {
+            const itemRect = item.getBoundingClientRect();
+            
+            // Check all visible dropzones
+            const dropzones = document.querySelectorAll('.screen.active .dropzone');
+            let dropped = false;
+
+            dropzones.forEach(zone => {
+                const zoneRect = zone.getBoundingClientRect();
+                if (checkOverlap(itemRect, zoneRect)) {
+                    
+                    // Logic for Tutorial
+                    if (item.id === 'tut-drag' && zone.id === 'tut-drop') {
+                        item.style.left = '10px'; item.style.top = '10px';
+                        item.style.position = 'relative';
+                        zone.appendChild(item);
+                        zone.classList.replace('border-yellow-400', 'border-green-400');
+                        document.getElementById('btn-tut-next').classList.remove('hidden');
+                        updateGeobot("เยี่ยมมาก! คุณพร้อมแล้ว");
+                        dropped = true;
+                    }
+
+                    // Logic for Level 1
+                    else if (currentLevel === 1 && item.dataset.answer) {
+                        if (item.dataset.answer === zone.dataset.type) {
+                            addScore(5, "จำแนกข้อมูลถูกต้อง");
+                            item.style.position = 'relative';
+                            item.style.left = 'auto'; item.style.top = 'auto';
+                            item.classList.remove('absolute', 'draggable', 'interactive-btn');
+                            zone.appendChild(item);
+                            lv1Correct++;
+                            if(lv1Correct >= 6) {
+                                document.getElementById('btn-lv1-next').classList.remove('hidden');
+                                updateGeobot("สุดยอด! ข้อมูล GIS แบ่งเป็น จุด เส้น และพื้นที่");
+                            }
+                        } else {
+                            deductScore(2, "ผิดประเภท");
+                            // Snap back
+                            item.style.left = `${Math.random() * 80}%`;
+                            item.style.top = '10px';
+                        }
+                        dropped = true;
+                    }
+
+                    // Logic for Level 2
+                    else if (currentLevel === 2 && item.dataset.sym) {
+                        if (item.dataset.sym === zone.dataset.sym) {
+                            addScore(10, "จับคู่สัญลักษณ์ถูก");
+                            item.style.position = 'relative';
+                            item.style.left = 'auto'; item.style.top = 'auto';
+                            item.classList.remove('absolute', 'draggable', 'interactive-btn');
+                            zone.innerHTML = '';
+                            zone.appendChild(item);
+                            zone.classList.replace('border-gray-400', 'border-green-400');
+                            lv2Correct++;
+                            if(lv2Correct >= 3) {
+                                document.getElementById('btn-lv2-next').classList.remove('hidden');
+                                updateGeobot("เยี่ยม! การอ่านแผนที่ต้องเข้าใจ Legend เสมอ");
+                            }
+                        } else {
+                            deductScore(5, "จับคู่ผิด");
+                        }
+                        dropped = true;
+                    }
+
+                    // Logic for Level 4 / Final (Pin dropping)
+                    else if ((currentLevel === 4 || currentLevel === 5) && item.id.includes('pin')) {
+                        // Snap to center of target
+                        item.style.left = zone.style.left;
+                        item.style.top = zone.style.top;
+                        item.dataset.selected = zone.dataset.point;
+                        dropped = true;
+                    }
+                }
+            });
+
+            if(!dropped && !item.id.includes('pin')) {
+                // Basic snap back if dropped in empty space (for lv1/2)
+                if(currentLevel === 1 || currentLevel === 2) {
+                    // Do nothing, leave where dropped but inside bounds
+                }
+            }
+        }
+
+        // --- Level 3 & 4 Logic (Overlay & Spatial) ---
+        // Handle layer toggles
+        document.querySelectorAll('.layer-toggle').forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const layerId = `layer-${e.target.value}`;
+                const layerEl = document.getElementById(layerId);
+                if(layerEl) {
+                    if(e.target.checked) layerEl.classList.add('active');
+                    else layerEl.classList.remove('active');
+                }
+            });
+        });
+
+        function checkLevel3() {
+            // Correct layers: road, flood, community
+            const chkRoad = document.querySelector('input[value="road"]').checked;
+            const chkRiver = document.querySelector('input[value="river"]').checked;
+            const chkComm = document.querySelector('input[value="community"]').checked;
+            const chkFlood = document.querySelector('input[value="flood"]').checked;
+            const chkColor = document.querySelector('input[value="color"]').checked;
+
+            if (chkRoad && chkComm && chkFlood && !chkColor) {
+                addScore(20, "เลือกชั้นข้อมูลสมบูรณ์");
+                
+                // Transition to Level 4 (same screen, new logic)
+                currentLevel = 4;
+                document.getElementById('l3-title').textContent = "ด่านที่ 4: วิเคราะห์พื้นที่เป้าหมาย";
+                document.getElementById('l3-desc').innerHTML = "จากชั้นข้อมูลที่เปิดไว้ ลาก 📍 ไปวางในพื้นที่ <span class='text-yellow-400 font-bold'>A, B, C หรือ D</span> ที่เหมาะสมที่สุด แล้วกดยืนยัน";
+                
+                // Hide layers panel, show targets
+                document.getElementById('lv4-targets').classList.remove('hidden');
+                document.querySelector('.w-1\\/3').classList.add('opacity-50', 'pointer-events-none'); // Disable sidebar
+                
+                // Change button
+                const btn = document.getElementById('btn-check-layer');
+                btn.textContent = "ยืนยันพื้นที่เป้าหมาย";
+                btn.classList.replace('pointer-events-none', 'pointer-events-auto'); // re-enable button
+                document.querySelector('.w-1\\/3').classList.remove('pointer-events-none'); // Need button to work
+                
+                // Disable checkboxes
+                document.querySelectorAll('.layer-toggle').forEach(c => c.disabled = true);
+                
+                btn.onclick = checkLevel4;
+                updateGeobot("วิเคราะห์จากแผนที่: ใกล้ถนน ใกล้ชุมชน แต่ต้องไม่โดนน้ำท่วม!");
+
+            } else {
+                deductScore(5, "ข้อมูลไม่ตรงเงื่อนไข");
+                updateGeobot("คำใบ้: ต้องการหาที่ตั้งศูนย์อพยพ ต้องรู้พื้นที่น้ำท่วม ถนน และชุมชน สีตำบลไม่เกี่ยว");
+            }
+        }
+
+        function checkLevel4() {
+            const pin = document.getElementById('analysis-pin');
+            const selected = pin.dataset.selected;
+
+            if (!selected) {
+                updateGeobot("กรุณาลากหมุด 📍 ไปวางบนจุดเป้าหมายก่อน");
+                return;
+            }
+
+            if (selected === 'C') {
+                addScore(20, "เลือกพื้นที่ถูกต้องที่สุด!");
+                updateGeobot("จุด C ถูกต้อง! ใกล้ถนน ใกล้ชุมชน และปลอดภัยจากน้ำท่วม");
+                setTimeout(() => {
+                    nextLevel('screen-final', 5);
+                }, 2000);
+            } else if (selected === 'A') {
+                deductScore(5); updateGeobot("จุด A น้ำท่วมนะ!");
+            } else if (selected === 'B') {
+                deductScore(5); updateGeobot("จุด B ไกลชุมชนและถนนเกินไป");
+            } else if (selected === 'D') {
+                deductScore(5); updateGeobot("จุด D ใกล้แม่น้ำเกินไป อาจเสี่ยง");
+            }
+        }
+
+        // --- Final Mission Logic ---
+        function checkFinal() {
+            const pin = document.getElementById('final-pin');
+            const selected = pin.dataset.selected;
+
+            if (!selected) {
+                updateGeobot("กรุณาลากหมุดไปวางบนจุด A, B, C หรือ D");
+                return;
+            }
+
+            if (selected === 'D') {
+                addScore(30, "เคลียร์ภารกิจสุดท้าย!");
+                showResultScreen();
+            } else {
+                deductScore(10, "วิเคราะห์พลาด");
+                let reason = "";
+                if(selected === 'A') reason = "จุด A อยู่ในพื้นที่น้ำท่วม";
+                if(selected === 'B') reason = "จุด B ไกลจากถนนหลัก เข้าถึงยาก";
+                if(selected === 'C') reason = "จุด C ไกลจากชุมชนเกินไป";
+                updateGeobot(`ยังไม่ดีที่สุด: ${reason} ลองพิจารณาใหม่`);
+            }
+        }
+
+        // --- Result Screen ---
+        function showResultScreen() {
+            UI.hud.classList.add('hidden');
+            showScreen('screen-result');
+            
+            document.getElementById('final-score').textContent = score;
+            
+            const rTitle = document.getElementById('rank-text');
+            const rDesc = document.getElementById('rank-desc');
+
+            if (score >= 90) {
+                rTitle.textContent = "GIS Master (ผู้เชี่ยวชาญ)";
+                rTitle.className = "text-3xl text-yellow-400 font-bold mt-4";
+                rDesc.textContent = "ยอดเยี่ยมมาก! คุณสามารถวิเคราะห์ข้อมูลเชิงพื้นที่เพื่อแก้ปัญหาได้อย่างแม่นยำ";
+            } else if (score >= 70) {
+                rTitle.textContent = "Geo Analyst (นักวิเคราะห์)";
+                rTitle.className = "text-3xl text-cyan-300 font-bold mt-4";
+                rDesc.textContent = "ดีมาก เข้าใจหลักการซ้อนทับข้อมูลและวิเคราะห์ปัจจัยพื้นฐานได้ดี";
+            } else {
+                rTitle.textContent = "Map Explorer (นักสำรวจ)";
+                rTitle.className = "text-3xl text-green-300 font-bold mt-4";
+                rDesc.textContent = "คุณอ่านแผนที่ได้ แต่ควรฝึกการนำข้อมูลหลายๆ ชั้นมาวิเคราะห์ร่วมกันอีกนิด";
+            }
+        }
+
+        // Ensure cursor updates smoothly via animation frame
+        function loop() {
+            // Optional: smooth interpolation for mouse/hand could go here
+            requestAnimationFrame(loop);
+        }
+        loop();
+
+    </script>
+</body>
+</html>

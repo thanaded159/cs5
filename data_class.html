@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Game: Data Classification (วิทยาการคำนวณ ม.5)</title>
+
+    <!-- เรียกใช้ Tailwind CSS เพื่อความสวยงามของ UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- เรียกใช้ Font Prompt จาก Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- นำเข้าไลบรารี MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Prompt', sans-serif;
+            background-color: #1a202c;
+        }
+        
+        /* จัดการวิดีโอและแคนวาสให้ซ้อนกันและเต็มจอ */
+        .video-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .input_video {
+            display: none; /* ซ่อนวิดีโอต้นฉบับ จะวาดลง Canvas แทน */
+        }
+
+        .output_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* ให้เต็มจอพอดี */
+        }
+
+        /* กล่อง UI ซ้อนทับบนสุด */
+        .overlay-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50;
+            pointer-events: none; /* ไม่ให้ UI บังการคลิก ยกเว้นปุ่ม */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .interactive-panel {
+            pointer-events: auto; /* ให้ปุ่มภายในกดได้ */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="video-container">
+        <!-- วิดีโอรับภาพจากกล้อง (ซ่อนไว้) -->
+        <video class="input_video" autoplay playsinline></video>
+        <!-- พื้นที่วาดเกมและเส้นมือ -->
+        <canvas class="output_canvas"></canvas>
+
+        <!-- UI ชั้นบนสุด -->
+        <div class="overlay-ui">
+            <!-- ส่วนแสดงคะแนน (มุมซ้ายบน) -->
+            <div id="scoreBoard" class="absolute top-4 left-4 bg-white/90 px-6 py-3 rounded-2xl shadow-lg border-2 border-blue-500 hidden">
+                <h2 class="text-xl font-bold text-gray-800">คะแนน: <span id="scoreDisplay" class="text-3xl text-blue-600">0</span> / 10</h2>
+                <p class="text-sm text-gray-600">ใช้ <span class="text-green-500 font-bold">นิ้วชี้</span> แตะ "ข้อมูลเชิงปริมาณ"</p>
+            </div>
+
+            <!-- หน้าจอเริ่มต้น -->
+            <div id="startScreen" class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex flex-col justify-center items-center interactive-panel">
+                <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-lg text-center transform transition-transform scale-100">
+                    <h1 class="text-3xl font-bold text-blue-600 mb-2">เกม AR แยกแยะข้อมูล</h1>
+                    <p class="text-gray-500 mb-6">วิทยาการคำนวณ ม.5 : Data Classification</p>
+                    
+                    <div class="text-left bg-blue-50 p-4 rounded-xl mb-8">
+                        <h3 class="font-bold text-gray-800 mb-2 text-lg">🎮 กติกาการเล่น:</h3>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-1">
+                            <li>จะมีคำศัพท์ตกลงมาจากด้านบนจอ</li>
+                            <li>ใช้ <b>"ปลายนิ้วชี้"</b> ของคุณ แตะเฉพาะคำที่เป็น<br><span class="text-blue-600 font-bold">"ข้อมูลเชิงปริมาณ" (ตัวเลขที่คำนวณได้)</span> เท่านั้น</li>
+                            <li>แตะถูกได้ 1 คะแนน (ครบ 10 คะแนนถือว่าผ่านด่าน)</li>
+                            <li>แตะ "ข้อมูลเชิงคุณภาพ" จะมีเสียงเตือนผิดพลาด</li>
+                        </ul>
+                    </div>
+
+                    <button id="startBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-full text-xl shadow-lg transition duration-300 w-full">
+                        เริ่มเปิดกล้องและเล่นเกม
+                    </button>
+                    <p id="loadingText" class="text-blue-600 font-bold mt-4 hidden animate-pulse">กำลังโหลด AI ตรวจจับมือและเปิดกล้อง... โปรดรอสักครู่</p>
+                </div>
+            </div>
+
+            <!-- หน้าจอจบเกม -->
+            <div id="gameOverScreen" class="absolute inset-0 bg-green-900/90 backdrop-blur-md flex flex-col justify-center items-center interactive-panel hidden">
+                <div class="bg-white p-10 rounded-3xl shadow-2xl text-center">
+                    <div class="text-6xl mb-4">🎉</div>
+                    <h1 class="text-4xl font-bold text-green-600 mb-4">ยินดีด้วย! คุณผ่านด่านแล้ว</h1>
+                    <p class="text-xl text-gray-700 mb-8">คุณสามารถแยกแยะ "ข้อมูลเชิงปริมาณ" ได้ถูกต้อง</p>
+                    <button id="restartBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg transition duration-300">
+                        เล่นอีกครั้ง
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // ส่วนที่ 1: ตั้งค่าระบบเสียง (Web Audio API)
+        // ==========================================
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // ฟังก์ชันสร้างเสียงสังเคราะห์
+        function playSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'correct') {
+                // เสียง ปิ๊ง! (แตะถูก)
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime); // เสียงสูง
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'wrong') {
+                // เสียง ตื๊ด! (แตะผิด)
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime); // เสียงต่ำ
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'win') {
+                // เสียง ทาดา (จบเกม)
+                osc.type = 'triangle';
+                const now = audioCtx.currentTime;
+                osc.frequency.setValueAtTime(440, now); // A4
+                osc.frequency.setValueAtTime(554.37, now + 0.2); // C#5
+                osc.frequency.setValueAtTime(659.25, now + 0.4); // E5
+                osc.frequency.setValueAtTime(880, now + 0.6); // A5
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 1.5);
+                osc.start(now);
+                osc.stop(now + 1.5);
+            }
+        }
+
+        // ==========================================
+        // ส่วนที่ 2: ตั้งค่าข้อมูลเกม (คุณครูแก้ไขตรงนี้ได้)
+        // ==========================================
+        
+        // ข้อมูลเชิงปริมาณ (คำตอบที่ถูกต้องที่ต้องแตะ)
+        const quantitativeData = ["ส่วนสูง", "น้ำหนัก", "อุณหภูมิ", "รายได้", "อายุ", "ระยะทาง", "คะแนนสอบ", "ปริมาณน้ำฝน"];
+        
+        // ข้อมูลเชิงคุณภาพ (คำตอบลวง ห้ามแตะ)
+        const qualitativeData = ["เพศ", "สีผม", "ศาสนา", "กรุ๊ปเลือด", "อาชีพ", "สัญชาติ", "ยี่ห้อรถ", "สถานภาพ"];
+
+        // ตั้งค่าความเร็วการตกของสิ่งของ (พิกเซลต่อเฟรม) - ปรับเพิ่มให้ยากขึ้นได้
+        const BASE_FALL_SPEED = 2; 
+
+        // ==========================================
+        // ส่วนที่ 3: ตัวแปรและการจัดการสถานะเกม
+        // ==========================================
+        let gameState = 'start'; // 'start', 'playing', 'gameover'
+        let score = 0;
+        const targetScore = 10;
+        let activeItems = []; // เก็บกล่องข้อความที่กำลังตกลงมา
+        let lastSpawnTime = 0;
+        
+        // อ้างอิง HTML Elements
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const loadingText = document.getElementById('loadingText');
+
+        // ฟังก์ชันสุ่มกล่องข้อความ
+        function spawnItem() {
+            if (gameState !== 'playing') return;
+
+            // หน่วงเวลาเกิดของกล่อง (ประมาณ 1.5 วินาทีต่อกล่อง)
+            const now = Date.now();
+            if (now - lastSpawnTime < 1500) return;
+            lastSpawnTime = now;
+
+            // สุ่มประเภท (50/50 โอกาสออกปริมาณหรือคุณภาพ)
+            const isQuantitative = Math.random() > 0.5;
+            const wordList = isQuantitative ? quantitativeData : qualitativeData;
+            const text = wordList[Math.floor(Math.random() * wordList.length)];
+
+            // สุ่มตำแหน่งแกน X ไม่ให้ชิดขอบจอเกินไป
+            const padding = 150;
+            const x = padding + Math.random() * (canvasElement.width - padding * 2);
+
+            activeItems.push({
+                x: x,
+                y: -50, // เริ่มต้นเหนือจอเล็กน้อย
+                text: text,
+                isCorrectType: isQuantitative, // เช็คว่าเป็นประเภทที่ต้องแตะไหม
+                speed: BASE_FALL_SPEED + Math.random() * 2, // สุ่มความเร็วต่างกันนิดหน่อย
+                width: 200, // ค่าเบื้องต้น จะถูกคำนวณใหม่ตอนวาด
+                height: 60,
+                id: Date.now()
+            });
+        }
+
+        // ฟังก์ชันอัปเดตและวาดสิ่งของลง Canvas
+        function updateAndDrawItems() {
+            for (let i = activeItems.length - 1; i >= 0; i--) {
+                let item = activeItems[i];
+                item.y += item.speed; // เลื่อนลงมาตามความเร็ว
+
+                // ลบไอเทมที่ตกเลยขอบจอด้านล่าง
+                if (item.y > canvasElement.height + 100) {
+                    activeItems.splice(i, 1);
+                    continue;
+                }
+
+                // จัดรูปแบบฟอนต์เพื่อใช้วัดขนาดกล่อง
+                canvasCtx.font = "bold 24px Prompt";
+                const textMetrics = canvasCtx.measureText(item.text);
+                item.width = textMetrics.width + 60; // เผื่อระยะขอบซ้ายขวา
+
+                // วาดกล่องพื้นหลัง
+                canvasCtx.fillStyle = item.isCorrectType ? "rgba(59, 130, 246, 0.9)" : "rgba(239, 68, 68, 0.9)"; // สีฟ้าคือ ปริมาณ, สีแดงคือ คุณภาพ (หลอกตาเด็กนิดหน่อย)
+                
+                // ถ้ายากไป สามารถตั้งให้สีเหมือนกันหมดเด็กจะได้ต้องอ่านตัวหนังสือจริงๆ
+                // canvasCtx.fillStyle = "rgba(75, 85, 99, 0.9)"; // สีเทาเหมือนกันหมด
+
+                // สร้างกล่องขอบมน
+                canvasCtx.beginPath();
+                canvasCtx.roundRect(item.x - item.width/2, item.y - item.height/2, item.width, item.height, 15);
+                canvasCtx.fill();
+                
+                // เพิ่มขอบสีขาว
+                canvasCtx.strokeStyle = "white";
+                canvasCtx.lineWidth = 3;
+                canvasCtx.stroke();
+
+                // วาดตัวหนังสือ
+                canvasCtx.fillStyle = "white";
+                canvasCtx.textAlign = "center";
+                canvasCtx.textBaseline = "middle";
+                canvasCtx.fillText(item.text, item.x, item.y);
+            }
+        }
+
+        // ฟังก์ชันตรวจสอบการชน (นิ้วแตะโดนกล่องไหม)
+        // รับค่าพิกัด x, y ของปลายนิ้วชี้
+        function checkCollision(fingerX, fingerY) {
+            for (let i = activeItems.length - 1; i >= 0; i--) {
+                let item = activeItems[i];
+                
+                // ตรวจสอบพิกัดนิ้ว ว่าอยู่ในพื้นที่กล่องข้อความหรือไม่ (Bounding Box Collision)
+                if (fingerX > item.x - item.width/2 && 
+                    fingerX < item.x + item.width/2 && 
+                    fingerY > item.y - item.height/2 && 
+                    fingerY < item.y + item.height/2) {
+                    
+                    // เมื่อแตะโดนแล้ว จัดการให้คะแนนและลบไอเทมออก
+                    if (item.isCorrectType) {
+                        // แตะถูก: ข้อมูลเชิงปริมาณ
+                        score++;
+                        scoreDisplay.innerText = score;
+                        playSound('correct');
+                        
+                        // สร้าง Effect ประกายไฟเล็กๆ (วาดวงกลมขยายตัว) ตรงจุดที่แตะ
+                        drawHitEffect(item.x, item.y, "rgba(74, 222, 128, 0.8)"); // สีเขียว
+                        
+                        // ลบไอเทมออก
+                        activeItems.splice(i, 1);
+
+                        // เช็คชนะ
+                        if (score >= targetScore) {
+                            endGame();
+                        }
+                    } else {
+                        // แตะผิด: ข้อมูลเชิงคุณภาพ
+                        playSound('wrong');
+                        drawHitEffect(item.x, item.y, "rgba(248, 113, 113, 0.8)"); // สีแดง
+                        activeItems.splice(i, 1); // ลบออกเช่นกัน กันผู้เล่นกดซ้ำ
+                    }
+                    break; // ชนทีละกล่องพอ
+                }
+            }
+        }
+
+        // วาดเอฟเฟคตอนชน (วาดค้างไว้แปปนึงผ่านการใช้ตัวแปรภายนอก หรือวาดสดแบบเร็วๆ)
+        // ในที่นี้วาดแค่เฟรมเดียวเพื่อความง่าย
+        function drawHitEffect(x, y, color) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, 60, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = color;
+            canvasCtx.fill();
+        }
+
+        // ==========================================
+        // ส่วนที่ 4: การตั้งค่า MediaPipe Hands
+        // ==========================================
+        
+        function onResults(results) {
+            // ปรับขนาด canvas ให้ตรงกับวิดีโอเพื่อไม่ให้เบี้ยว
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // วาดภาพวิดีโอจากกล้อง (สลับซ้ายขวาให้เหมือนกระจก เพื่อให้ผู้เล่นขยับมือได้ตรงทิศ)
+            canvasCtx.translate(canvasElement.width, 0);
+            canvasCtx.scale(-1, 1);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            // ยกเลิกการสลับซ้ายขวา เพื่อเวลาวาดตัวหนังสือจะได้ไม่กลับหัว
+            canvasCtx.restore(); 
+
+            // หากเกมอยู่ในสถานะกำลังเล่น ให้สร้างและวาดสิ่งของ
+            if (gameState === 'playing') {
+                spawnItem();
+                updateAndDrawItems();
+            }
+
+            // หากตรวจจับมือได้
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // วาดโครงสร้างมือ (ถ้าต้องการให้เห็นข้อมือด้วย เอาคอมเมนต์ออก)
+                    // drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#ffffff', lineWidth: 2});
+                    
+                    // จุดที่ 8 คือ ปลายนิ้วชี้ (Index Finger Tip)
+                    const indexFingerTip = landmarks[8];
+                    
+                    // คำนวณพิกัดให้ตรงกับ Canvas (ต้องสลับแกน X เพราะเราสลับภาพกล้องให้เป็นกระจกไปแล้ว)
+                    const fingerX = (1 - indexFingerTip.x) * canvasElement.width;
+                    const fingerY = indexFingerTip.y * canvasElement.height;
+
+                    // วาดวงกลมเรืองแสงที่ปลายนิ้วชี้เพื่อเป็น Pointer
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(fingerX, fingerY, 15, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = gameState === 'playing' ? 'rgba(0, 255, 100, 0.8)' : 'rgba(255, 255, 255, 0.5)';
+                    canvasCtx.fill();
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.strokeStyle = 'white';
+                    canvasCtx.stroke();
+
+                    // ตรวจสอบการแตะกล่องข้อความ
+                    if (gameState === 'playing') {
+                        checkCollision(fingerX, fingerY);
+                    }
+                }
+            }
+        }
+
+        // โหลด MediaPipe Hands Model
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 2, // ตรวจจับ 2 มือ
+            modelComplexity: 1, // ความแม่นยำ (0, 1) แนะนำ 1 เพื่อความเสถียร
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720,
+            facingMode: 'user' // ใช้กล้องหน้า
+        });
+
+        // ==========================================
+        // ส่วนที่ 5: การควบคุม Flow ของเกม
+        // ==========================================
+
+        function startGame() {
+            initAudio(); // ต้องเรียกผ่าน User Interaction (คลิกปุ่ม)
+            score = 0;
+            activeItems = [];
+            scoreDisplay.innerText = score;
+            
+            startBtn.classList.add('hidden');
+            loadingText.classList.remove('hidden');
+
+            // เริ่มเปิดกล้อง
+            camera.start().then(() => {
+                // ซ่อนหน้าจอเริ่มต้น และแสดง UI เกม
+                startScreen.classList.add('hidden');
+                scoreBoard.classList.remove('hidden');
+                gameState = 'playing';
+            }).catch(err => {
+                alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตให้ใช้งานกล้องและรีเฟรชหน้าเว็บ\nข้อผิดพลาด: " + err.message);
+                startBtn.classList.remove('hidden');
+                loadingText.classList.add('hidden');
+            });
+        }
+
+        function endGame() {
+            gameState = 'gameover';
+            playSound('win');
+            scoreBoard.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function restartGame() {
+            score = 0;
+            activeItems = [];
+            scoreDisplay.innerText = score;
+            gameOverScreen.classList.add('hidden');
+            scoreBoard.classList.remove('hidden');
+            gameState = 'playing';
+        }
+
+        // ผูก Event ให้ปุ่ม
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', restartGame);
+
+        // ป้องกันหน้าจอมืดเวลารันในบางอุปกรณ์ (ขยาย canvas ให้พอดีกับจอเมื่อ resize)
+        window.addEventListener('resize', () => {
+            if (videoElement.videoWidth) {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+            }
+        });
+
+    </script>
+</body>
+</html>

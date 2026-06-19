@@ -1,1211 +1,1210 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Quest AR: ภารกิจนักวิทยาการข้อมูล</title>
-    
-    <!-- TailwindCSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts: Noto Sans Thai -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700&display=swap" rel="stylesheet">
-    
-    <!-- MediaPipe Hands -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Data Quest AR: ภารกิจนักวิทยาการข้อมูล</title>
 
-    <style>
-        html, body {
-            width: 100%;
-            height: 100%;
-            overscroll-behavior: none;
-            touch-action: none;
-        }
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
 
-        body {
-            font-family: 'Noto Sans Thai', sans-serif;
-            overflow: hidden; /* ป้องกันการ Scroll */
-            background-color: #0f172a;
-            user-select: none;
-            -webkit-user-select: none;
-        }
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
-        main > div {
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
+  <style>
+    :root {
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --success: #22c55e;
+      --warn: #facc15;
+      --danger: #ef4444;
+      --dwell: 0deg;
+    }
 
-        button,
-        .btn-s2,
-        .btn-s4,
-        .btn-s5,
-        .btn-final,
-        .row-s3,
-        .draggable {
-            touch-action: none;
-            -webkit-tap-highlight-color: transparent;
-        }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
+      background: #020617;
+      color: #fff;
+      font-family: 'Noto Sans Thai', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
 
-        /* Glassmorphism Effect */
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -5;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(56, 189, 248, 0.28), transparent 28%),
+        radial-gradient(circle at 80% 15%, rgba(167, 139, 250, 0.24), transparent 30%),
+        radial-gradient(circle at 50% 90%, rgba(14, 165, 233, 0.18), transparent 40%),
+        linear-gradient(135deg, #020617 0%, #0f172a 50%, #111827 100%);
+    }
 
-        .glass-dark {
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(56, 189, 248, 0.3);
-        }
+    .camera-layer {
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      overflow: hidden;
+      background: #020617;
+    }
 
-        /* AR Cursor */
-        #ar-cursor {
-            position: fixed;
-            width: 24px;
-            height: 24px;
-            background-color: rgba(56, 189, 248, 0.8);
-            border: 2px solid white;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 9999;
-            transition: transform 0.1s, background-color 0.2s;
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
-            display: none;
-        }
+    #cameraVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      opacity: 0;
+      transition: opacity 450ms ease;
+      filter: saturate(0.9) contrast(1.08) brightness(0.72);
+    }
 
-        #ar-cursor.pinching {
-            transform: translate(-50%, -50%) scale(0.6);
-            background-color: #facc15; /* สีเหลืองเมื่อหนีบนิ้ว */
-            box-shadow: 0 0 20px #facc15;
-        }
+    body.camera-on #cameraVideo {
+      opacity: 0.36;
+    }
 
-        /* Video Background */
-        .video-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: -1;
-            overflow: hidden;
-        }
+    #handCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -2;
+      pointer-events: none;
+      opacity: 0.82;
+    }
 
-        #webcam {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); /* กลับซ้ายขวาให้เหมือนกระจก */
-            opacity: 0.4; /* ให้มืดลงเพื่อให้ UI เด่น */
-        }
+    .glass {
+      background: rgba(15, 23, 42, 0.62);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
 
-        .cyber-bg {
-            background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);
-        }
+    .glass-soft {
+      background: rgba(255, 255, 255, 0.09);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
 
-        /* Draggable Items */
-        .draggable {
-            cursor: grab;
-            transition: transform 0.2s;
-        }
-        .draggable:active, .is-dragged {
-            cursor: grabbing;
-            transform: scale(1.05);
-            z-index: 50;
-        }
+    .neon-title {
+      text-shadow: 0 0 24px rgba(56, 189, 248, 0.42), 0 0 40px rgba(167, 139, 250, 0.25);
+    }
 
-        .ar-targeted {
-            outline: 3px solid rgba(250, 204, 21, 0.95);
-            outline-offset: 4px;
-            box-shadow: 0 0 22px rgba(250, 204, 21, 0.65), inset 0 0 12px rgba(250, 204, 21, 0.18);
-        }
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: none;
+      padding: clamp(0.7rem, 1.6vw, 1.35rem);
+    }
 
-        .ar-hand-lost {
-            opacity: 0.45;
-            transform: translate(-50%, -50%) scale(0.85);
-        }
+    .screen.active {
+      display: flex;
+      animation: fadeIn 260ms ease both;
+    }
 
-        .floating {
-            animation: float 3s ease-in-out infinite;
-        }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.992); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
 
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0px); }
-        }
+    .game-target {
+      position: relative;
+      outline: none;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    }
 
-        /* Notifications */
-        #notification {
-            transition: opacity 0.3s, transform 0.3s;
-        }
+    .game-target:hover,
+    .game-target:focus-visible,
+    .game-target.aimed {
+      transform: translateY(-2px) scale(1.018);
+      border-color: rgba(250, 204, 21, 0.95) !important;
+      box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18), 0 0 32px rgba(250, 204, 21, 0.22);
+      background: rgba(250, 204, 21, 0.14);
+    }
 
-        @media (max-width: 768px) {
-            #app { padding: 0.5rem; }
-            #status-bar {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 0.75rem;
-                padding: 0.75rem;
-            }
-            #status-bar > div {
-                justify-content: space-between;
-            }
-            #screen-intro {
-                width: calc(100% - 1rem);
-                padding: 1.25rem;
-                gap: 1rem;
-            }
-            #screen-intro h1 { font-size: 2.25rem; }
-            #screen-intro h2 { font-size: 1.5rem; }
-            #screen-stage5 .btn-s5 { padding: 1rem; }
-        }
-    </style>
+    .game-target.correct-selected {
+      border-color: rgba(34, 197, 94, 0.9) !important;
+      background: rgba(34, 197, 94, 0.23) !important;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16), 0 0 30px rgba(34, 197, 94, 0.2);
+    }
+
+    .game-target.wrong-selected {
+      border-color: rgba(239, 68, 68, 0.9) !important;
+      background: rgba(239, 68, 68, 0.22) !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14), 0 0 30px rgba(239, 68, 68, 0.2);
+    }
+
+    .game-target.disabled {
+      pointer-events: none;
+      opacity: 0.62;
+      filter: grayscale(0.15);
+    }
+
+    .target-badge {
+      position: absolute;
+      right: 0.75rem;
+      top: 0.65rem;
+      display: none;
+      font-size: 1.15rem;
+    }
+
+    .correct-selected .target-badge,
+    .wrong-selected .target-badge {
+      display: block;
+    }
+
+    #arCursor {
+      position: fixed;
+      left: -100px;
+      top: -100px;
+      width: 58px;
+      height: 58px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+      place-items: center;
+    }
+
+    #arCursor.visible { display: grid; }
+
+    #arCursor::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: conic-gradient(#facc15 var(--dwell), rgba(255,255,255,0.14) 0deg);
+      box-shadow: 0 0 28px rgba(56, 189, 248, 0.34);
+      transition: background 60ms linear;
+    }
+
+    #arCursor::after {
+      content: "";
+      position: absolute;
+      inset: 8px;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      box-shadow: inset 0 0 18px rgba(56, 189, 248, 0.32);
+    }
+
+    #arCursor .dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 999px;
+      background: #38bdf8;
+      z-index: 2;
+      box-shadow: 0 0 18px #38bdf8;
+    }
+
+    #arCursor.pinching .dot {
+      background: #facc15;
+      box-shadow: 0 0 22px #facc15;
+    }
+
+    #arCursor.lost {
+      opacity: 0.42;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(0.75rem, 1.6vw, 1.15rem);
+    }
+
+    @media (max-width: 820px) {
+      .choice-grid { grid-template-columns: 1fr; }
+      .stage-shell { max-height: calc(100vh - 10.5rem); overflow-y: auto; }
+      #topBar { gap: .65rem; }
+    }
+
+    .stage-shell::-webkit-scrollbar { width: 9px; }
+    .stage-shell::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 999px; }
+
+    .mini-pill {
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.08);
+      border-radius: 999px;
+      padding: .45rem .75rem;
+      white-space: nowrap;
+    }
+
+    .slot-filled {
+      border-color: rgba(34, 197, 94, 0.9) !important;
+      color: #86efac !important;
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .toast-show {
+      opacity: 1 !important;
+      transform: translate(-50%, 0) scale(1) !important;
+    }
+
+    .pulse-good { animation: pulseGood 460ms ease; }
+    @keyframes pulseGood {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.11); }
+      100% { transform: scale(1); }
+    }
+  </style>
 </head>
-<body class="text-white cyber-bg">
+<body>
+  <div class="camera-layer" aria-hidden="true">
+    <video id="cameraVideo" playsinline autoplay muted></video>
+  </div>
+  <canvas id="handCanvas" aria-hidden="true"></canvas>
+  <div id="arCursor" aria-hidden="true"><div class="dot"></div></div>
 
-    <!-- AR Camera Background -->
-    <div class="video-container">
-        <video id="webcam" autoplay playsinline></video>
-    </div>
+  <div id="toast" class="fixed top-4 left-1/2 z-[9998] opacity-0 pointer-events-none transition-all duration-200 -translate-x-1/2 -translate-y-3 scale-95">
+    <div id="toastInner" class="rounded-full px-5 py-3 text-base md:text-lg font-extrabold shadow-2xl text-center max-w-[92vw]"></div>
+  </div>
 
-    <!-- AR Cursor Indicator -->
-    <div id="ar-cursor"></div>
-
-    <!-- Notification Toast -->
-    <div id="notification" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 opacity-0 pointer-events-none">
-        <div id="notif-content" class="px-6 py-3 rounded-full text-lg font-bold shadow-lg text-center">
-            ข้อความแจ้งเตือน
+  <div id="app" class="relative z-10 h-screen w-screen flex flex-col p-3 md:p-4">
+    <header id="topBar" class="hidden glass rounded-2xl px-3 py-3 md:px-4 md:py-3 mb-3 items-center justify-between">
+      <div class="flex min-w-0 items-center gap-3">
+        <div class="rounded-xl bg-sky-500/20 border border-sky-300/30 px-3 py-2 text-center">
+          <div class="text-xs text-sky-200">ภารกิจ</div>
+          <div id="stageCounter" class="font-black text-lg md:text-xl text-white">1/6</div>
         </div>
-    </div>
+        <div class="min-w-0">
+          <h2 id="stageTitle" class="text-lg md:text-2xl font-black text-sky-200 truncate">ชื่อด่าน</h2>
+          <p id="stageInstruction" class="hidden md:block text-sm text-slate-300 truncate">คำอธิบาย</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 md:gap-3">
+        <div class="mini-pill text-sm md:text-base">
+          <span class="text-slate-300">คะแนน</span>
+          <span id="scoreText" class="ml-1 text-amber-300 font-black text-xl">0</span>
+        </div>
+        <div id="cameraStatus" class="mini-pill text-xs md:text-sm text-slate-200 max-w-[42vw] truncate">
+          เมาส์/สัมผัส
+        </div>
+      </div>
+    </header>
 
-    <!-- Main UI Container -->
-    <div id="app" class="relative w-full h-screen flex flex-col p-4">
+    <main class="relative flex-1 min-h-0">
+      <section id="screenIntro" class="screen active items-center justify-center">
+        <div class="glass rounded-[2rem] w-full max-w-5xl p-5 md:p-9 text-center">
+          <div class="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-400/10 px-4 py-2 text-sky-100 font-bold mb-5">
+            AR Web-Based Learning Game · MediaPipe Hands
+          </div>
+          <h1 class="neon-title text-4xl md:text-7xl font-black leading-tight text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-cyan-200 to-violet-300">
+            Data Quest AR
+          </h1>
+          <h2 class="mt-2 text-2xl md:text-4xl font-extrabold">ภารกิจนักวิทยาการข้อมูล</h2>
+          <p class="mx-auto mt-5 max-w-3xl text-slate-200 text-base md:text-xl leading-relaxed">
+            เรียนรู้กระบวนการวิทยาการข้อมูล 5 ขั้นตอนผ่านเกมตอบคำถามแบบ AR ใช้มือควบคุมผ่านกล้อง หรือเล่นด้วยเมาส์/สัมผัสได้ทันที
+          </p>
 
-        <!-- Header / Status Bar (Hidden on Intro) -->
-        <header id="status-bar" class="hidden glass-dark rounded-xl p-4 mb-4 flex justify-between items-center z-10">
-            <div class="flex items-center gap-4">
-                <div class="bg-blue-600 p-2 rounded-lg">
-                    <span class="font-bold text-xl">ด่านที่ <span id="current-stage-display">1</span>/5</span>
-                </div>
-                <div>
-                    <h2 id="stage-title" class="text-xl font-bold text-blue-300">ชื่อด่าน</h2>
-                    <p id="stage-desc" class="text-sm text-gray-300">คำอธิบาย</p>
-                </div>
+          <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3 text-left">
+            <div class="glass-soft rounded-2xl p-4">
+              <div class="text-2xl mb-2">☝️</div>
+              <h3 class="font-black text-sky-200">ควบคุมง่ายขึ้น</h3>
+              <p class="text-sm text-slate-300 mt-1">ใช้นิ้วชี้เล็งคำตอบ แล้วค้างประมาณ 0.9 วินาทีเพื่อเลือก</p>
             </div>
-            <div class="flex items-center gap-6">
-                <div class="text-right">
-                    <p class="text-sm text-gray-400">คะแนน</p>
-                    <p class="text-3xl font-bold text-yellow-400" id="score-display">0</p>
-                </div>
-                <div id="camera-status" class="flex items-center gap-2 text-red-400 bg-red-400/20 px-3 py-1 rounded-full text-sm">
-                    <span class="relative flex h-3 w-3">
-                      <span id="cam-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span id="cam-dot" class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                    </span>
-                    <span id="cam-text">กล้องปิดอยู่ / เมาส์โหมด</span>
-                </div>
+            <div class="glass-soft rounded-2xl p-4">
+              <div class="text-2xl mb-2">👌</div>
+              <h3 class="font-black text-amber-200">จีบแล้วปล่อยได้</h3>
+              <p class="text-sm text-slate-300 mt-1">ต้องการคลิกเร็ว ให้จีบนิ้วบนคำตอบแล้วปล่อย ระบบจะเลือกเป้าหมายที่เล็งอยู่</p>
             </div>
-        </header>
-
-        <!-- Screens Container -->
-        <main class="flex-grow relative z-10">
-
-            <!-- 0. Intro Screen -->
-            <div id="screen-intro" class="absolute inset-0 flex flex-col items-center justify-center text-center space-y-8 glass rounded-3xl p-8 max-w-4xl mx-auto my-auto h-fit">
-                <div class="animate-pulse">
-                    <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
-                        Data Quest AR
-                    </h1>
-                    <h2 class="text-3xl text-white">ภารกิจนักวิทยาการข้อมูล</h2>
-                </div>
-                <p class="text-lg text-gray-300 max-w-2xl">
-                    รับบทนักวิทยาการข้อมูลรุ่นเยาว์ ช่วยโรงเรียนวิเคราะห์ข้อมูลการมาสายของนักเรียน ผ่านกระบวนการ 5 ขั้นตอน โดยใช้ <b>มือของคุณ</b> ควบคุมผ่านกล้อง Webcam
-                </p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg mt-8">
-                    <button onclick="startGame(true)" class="bg-blue-600 hover:bg-blue-500 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/50 transition-all hover:scale-105 border border-blue-400">
-                        📹 เริ่มเกม (เปิดกล้อง AR)
-                    </button>
-                    <button onclick="startGame(false)" class="bg-slate-700 hover:bg-slate-600 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all hover:scale-105 border border-slate-500">
-                        🖱️ เล่นด้วยเมาส์ (ไม่ใช้กล้อง)
-                    </button>
-                </div>
-                <p class="text-sm text-yellow-300 mt-4">* โหมด AR: ใช้นิ้วชี้เพื่อเลื่อน และจีบนิ้ว (นิ้วชี้+นิ้วโป้ง) เพื่อจับ/คลิก</p>
+            <div class="glass-soft rounded-2xl p-4">
+              <div class="text-2xl mb-2">🖱️</div>
+              <h3 class="font-black text-violet-200">มีโหมดสำรอง</h3>
+              <p class="text-sm text-slate-300 mt-1">ทุกด่านรองรับเมาส์ จอสัมผัส และคีย์บอร์ด Enter/Space</p>
             </div>
+          </div>
 
-            <!-- 1. Stage 1: Ask (Drag Question) -->
-            <div id="screen-stage1" class="hidden absolute inset-0 flex flex-col items-center justify-between p-4">
-                <!-- Helper Bot -->
-                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
-                    <div class="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-3xl shadow-lg shadow-blue-500/50 shrink-0">🤖</div>
-                    <p class="text-lg">"สวัสดี! เริ่มภารกิจแรก <b>การตั้งคำถาม</b> โรงเรียนอยากรู้ว่าทำไมนักเรียนมาสาย ลากคำถามที่ดีที่สุดลงไปในกล่องวิเคราะห์เลย จีบนิ้วเพื่อจับนะ!"</p>
-                </div>
+          <div class="mt-7 flex flex-col md:flex-row justify-center gap-4">
+            <button id="startAR" class="rounded-2xl bg-sky-500 hover:bg-sky-400 active:scale-[.98] px-7 py-4 text-xl font-black shadow-2xl shadow-sky-500/25 border border-sky-200/40 transition">
+              📹 เริ่มเกมด้วยกล้อง AR
+            </button>
+            <button id="startMouse" class="rounded-2xl bg-slate-700 hover:bg-slate-600 active:scale-[.98] px-7 py-4 text-xl font-black shadow-xl border border-slate-400/25 transition">
+              🖱️ เล่นด้วยเมาส์/สัมผัส
+            </button>
+          </div>
+          <p class="mt-5 text-sm md:text-base text-amber-200">
+            คำแนะนำ AR: ให้มือห่างกล้องประมาณ 50–80 ซม. มีแสงด้านหน้า และให้พื้นหลังไม่รกมาก
+          </p>
+        </div>
+      </section>
 
-                <!-- Dropzone -->
-                <div id="dropzone-s1" class="w-full max-w-2xl h-48 border-4 border-dashed border-blue-400 rounded-3xl flex items-center justify-center bg-blue-900/40 transition-colors">
-                    <p class="text-2xl text-blue-200 font-bold opacity-50">วางคำถามที่เหมาะสมที่นี่</p>
-                </div>
-
-                <!-- Draggable Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl mt-8">
-                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="false" data-original-x="0" data-original-y="0">
-                        นักเรียนคนใดนิสัยไม่ดีถึงมาสาย?
-                    </div>
-                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="true" data-original-x="0" data-original-y="0">
-                        ปัจจัยใดบ้างที่สัมพันธ์กับการมาโรงเรียนสาย?
-                    </div>
-                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="true" data-original-x="0" data-original-y="0">
-                        ช่วงเวลาใดมีนักเรียนมาสายมากที่สุด?
-                    </div>
-                    <div class="card-s1 draggable glass p-6 rounded-xl text-center text-xl hover:bg-white/20" data-correct="false" data-original-x="0" data-original-y="0">
-                        ใครควรถูกลงโทษกวาดลานวัด?
-                    </div>
-                </div>
+      <section id="screenGame" class="screen flex-col">
+        <div class="stage-shell glass rounded-[1.65rem] p-4 md:p-6 w-full max-w-6xl mx-auto flex-1 flex flex-col min-h-0">
+          <div class="flex items-start gap-3 md:gap-4 mb-4">
+            <div id="mentorIcon" class="shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-sky-500/20 border border-sky-300/30 grid place-items-center text-3xl md:text-4xl shadow-lg">🤖</div>
+            <div class="min-w-0">
+              <h3 id="stageHeading" class="text-xl md:text-3xl font-black text-white"></h3>
+              <p id="stagePrompt" class="mt-1 text-slate-200 text-sm md:text-lg leading-relaxed"></p>
+              <div id="stageHint" class="mt-2 inline-flex rounded-full bg-amber-300/12 border border-amber-200/25 px-3 py-1 text-amber-100 text-xs md:text-sm font-bold"></div>
             </div>
+          </div>
+          <div id="stageContent" class="flex-1 min-h-0"></div>
+        </div>
+      </section>
 
-            <!-- 2. Stage 2: Collect -->
-            <div id="screen-stage2" class="hidden absolute inset-0 flex flex-col items-center p-4">
-                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-8">
-                    <div class="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
-                    <p class="text-lg">"เยี่ยมมาก! ต่อไปคือ <b>การเก็บรวบรวมข้อมูล</b> เลือกเก็บเฉพาะข้อมูลที่จำเป็นและไม่ละเมิดสิทธิส่วนบุคคลมากเกินไปนะ แตะ/จับข้อมูลที่ถูกต้อง!"</p>
-                </div>
+      <section id="screenSummary" class="screen items-center justify-center">
+        <div class="glass rounded-[2rem] w-full max-w-4xl p-6 md:p-10 text-center">
+          <div class="text-6xl md:text-7xl mb-2">🏆</div>
+          <h1 class="neon-title text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-orange-400">ภารกิจสำเร็จ!</h1>
+          <p class="mt-3 text-slate-200 text-lg md:text-xl">คุณผ่านกระบวนการวิทยาการข้อมูลครบทุกขั้นตอน</p>
+          <div class="my-7 rounded-3xl border border-white/15 bg-black/20 p-6">
+            <div class="text-slate-300 font-bold">คะแนนรวม</div>
+            <div id="finalScore" class="text-7xl md:text-8xl font-black text-amber-300 my-2">0</div>
+            <div id="rankBadge" class="inline-flex rounded-full px-5 py-2 font-black text-lg bg-sky-500/20 border border-sky-300/30 text-sky-100">ระดับ</div>
+          </div>
+          <div class="text-left rounded-3xl border border-white/12 bg-white/7 p-5 md:p-6">
+            <h3 class="font-black text-sky-200 text-xl mb-3">สรุปกระบวนการวิทยาการข้อมูล</h3>
+            <ol class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm md:text-base">
+              <li class="glass-soft rounded-2xl p-3"><b>1. ตั้งคำถาม</b><br><span class="text-slate-300">กำหนดปัญหาให้ชัด</span></li>
+              <li class="glass-soft rounded-2xl p-3"><b>2. รวบรวมข้อมูล</b><br><span class="text-slate-300">เก็บข้อมูลที่เกี่ยวข้อง</span></li>
+              <li class="glass-soft rounded-2xl p-3"><b>3. สำรวจข้อมูล</b><br><span class="text-slate-300">ตรวจข้อมูลผิดปกติ</span></li>
+              <li class="glass-soft rounded-2xl p-3"><b>4. วิเคราะห์ข้อมูล</b><br><span class="text-slate-300">หาคำตอบจากข้อมูล</span></li>
+              <li class="glass-soft rounded-2xl p-3"><b>5. สื่อสารด้วยภาพ</b><br><span class="text-slate-300">นำเสนอให้เข้าใจง่าย</span></li>
+            </ol>
+          </div>
+          <button id="restartBtn" class="mt-7 rounded-2xl bg-sky-500 hover:bg-sky-400 active:scale-[.98] px-8 py-4 text-xl font-black shadow-2xl shadow-sky-500/25 border border-sky-200/40 transition">
+            เล่นอีกครั้ง
+          </button>
+        </div>
+      </section>
+    </main>
+  </div>
 
-                <div class="relative w-full h-full flex items-center justify-center">
-                    <!-- Cards scattered via CSS/JS -->
-                    <div class="flex flex-wrap justify-center gap-6 max-w-4xl">
-                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-green-500/50 transition-colors" data-correct="true">เวลาเข้าโรงเรียน</button>
-                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-green-500/50 transition-colors" data-correct="true">วิธีเดินทาง</button>
-                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-red-500/50 transition-colors" data-correct="false">เลขประจำตัวประชาชน</button>
-                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-green-500/50 transition-colors" data-correct="true">ระดับชั้น</button>
-                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-red-500/50 transition-colors" data-correct="false">สีรองเท้าที่ชอบ</button>
-                        <button class="btn-s2 glass px-6 py-4 rounded-full text-xl hover:bg-red-500/50 transition-colors" data-correct="false">เบอร์โทรผู้ปกครอง</button>
-                    </div>
-                </div>
-                <p class="mt-8 text-xl text-yellow-300">เลือกข้อมูลที่ถูกต้องให้ครบ 3 อย่าง</p>
+  <script>
+    'use strict';
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+    const CONFIG = {
+      dwellMs: 920,
+      arActivationCooldownMs: 680,
+      arHitPadding: 42,
+      maxFps: 30,
+      missingFrameTolerance: 10,
+      smoothingSlow: 0.16,
+      smoothingFast: 0.44,
+      pinchStart: 0.42,
+      pinchRelease: 0.62,
+      pinchStableFrames: 3
+    };
+
+    const STAGES = [
+      {
+        key: 'ask', icon: '❓', title: 'ด่านที่ 1: ตั้งคำถามให้วัดผลได้', short: 'ตั้งคำถาม',
+        prompt: 'โรงเรียนต้องการเข้าใจปัญหาการมาโรงเรียนสาย เลือกคำถามที่เป็นกลาง วัดผลได้ และใช้ข้อมูลตอบได้จริง',
+        hint: 'เลือกคำถามที่เหมาะสมให้ครบ 2 ข้อ', type: 'multi', need: 2, points: 12,
+        choices: [
+          { text: 'ปัจจัยใดบ้างที่สัมพันธ์กับการมาโรงเรียนสาย?', correct: true, explain: 'คำถามนี้วิเคราะห์ด้วยข้อมูลได้' },
+          { text: 'ช่วงเวลาใดมีนักเรียนมาสายมากที่สุด?', correct: true, explain: 'คำถามนี้ชัดเจนและวัดผลได้' },
+          { text: 'นักเรียนคนใดนิสัยไม่ดีถึงมาสาย?', correct: false, explain: 'คำถามมีอคติและไม่เหมาะกับการวิเคราะห์ข้อมูล' },
+          { text: 'ใครควรถูกลงโทษทันที?', correct: false, explain: 'ไม่ใช่คำถามเชิงข้อมูลและมีอคติ' }
+        ]
+      },
+      {
+        key: 'collect', icon: '📥', title: 'ด่านที่ 2: รวบรวมข้อมูลอย่างเหมาะสม', short: 'รวบรวมข้อมูล',
+        prompt: 'เลือกข้อมูลที่จำเป็นต่อการวิเคราะห์ โดยไม่เก็บข้อมูลส่วนบุคคลเกินความจำเป็น',
+        hint: 'เลือกข้อมูลที่ถูกต้องให้ครบ 3 รายการ', type: 'multi', need: 3, points: 10,
+        choices: [
+          { text: 'เวลาเข้าโรงเรียน', correct: true, explain: 'เป็นข้อมูลหลักสำหรับตรวจสถานะมาสาย' },
+          { text: 'วิธีเดินทางมาโรงเรียน', correct: true, explain: 'ช่วยวิเคราะห์ปัจจัยที่เกี่ยวข้องได้' },
+          { text: 'ระดับชั้น', correct: true, explain: 'ช่วยเปรียบเทียบกลุ่มนักเรียนได้' },
+          { text: 'เลขประจำตัวประชาชน', correct: false, explain: 'เป็นข้อมูลส่วนบุคคลอ่อนไหว ไม่จำเป็นต่อโจทย์นี้' },
+          { text: 'สีรองเท้าที่ชอบ', correct: false, explain: 'ไม่เกี่ยวข้องกับการมาโรงเรียนสาย' },
+          { text: 'รหัสผ่านบัญชีส่วนตัว', correct: false, explain: 'ไม่ควรเก็บโดยเด็ดขาด' }
+        ]
+      },
+      {
+        key: 'explore', icon: '🧹', title: 'ด่านที่ 3: สำรวจและทำความสะอาดข้อมูล', short: 'สำรวจข้อมูล',
+        prompt: 'ข้อมูลดิบอาจมี missing value, outlier หรือรูปแบบผิดพลาด เลือกแถวที่ควรตรวจสอบ/ลบออกก่อนวิเคราะห์',
+        hint: 'เลือกข้อมูลผิดปกติให้ครบ 3 แถว', type: 'table', need: 3, points: 10,
+        rows: [
+          { day: 'จันทร์', level: 'ม.5', time: '07:45', status: 'ปกติ', correct: false },
+          { day: 'อังคาร', level: 'ม.99', time: '08:05', status: 'สาย', correct: true, reason: 'ระดับชั้น ม.99 ไม่มีอยู่จริง' },
+          { day: 'พุธ', level: 'ม.4', time: '08:10', status: 'สาย', correct: false },
+          { day: 'พฤหัสบดี', level: 'ม.6', time: '--:--', status: 'ว่างเปล่า', correct: true, reason: 'เวลาเข้าเรียนหายไป' },
+          { day: 'ศุกร์', level: 'ม.5', time: '25:99', status: 'สาย', correct: true, reason: 'เวลา 25:99 ไม่ถูกต้อง' }
+        ]
+      },
+      {
+        key: 'analyze', icon: '📊', title: 'ด่านที่ 4: เลือกวิธีวิเคราะห์', short: 'วิเคราะห์ข้อมูล',
+        prompt: 'โจทย์คือ “ปัจจัยใด เช่น วิธีเดินทางหรือระดับชั้น สัมพันธ์กับการมาสายมากที่สุด?” เลือกวิธีวิเคราะห์ที่ตอบโจทย์ที่สุด',
+        hint: 'เลือกคำตอบที่ดีที่สุด 1 ข้อ', type: 'single', need: 1, points: 18,
+        choices: [
+          { text: 'หาค่าเฉลี่ยอายุของนักเรียนทั้งโรงเรียน', correct: false, explain: 'ไม่ตอบความสัมพันธ์กับการมาสาย' },
+          { text: 'จัดกลุ่มจำนวนคนมาสาย แยกตามวิธีเดินทางและระดับชั้น แล้วเปรียบเทียบ', correct: true, explain: 'ตรงกับโจทย์และเปรียบเทียบปัจจัยได้' },
+          { text: 'เรียงลำดับชื่อนักเรียนตามตัวอักษร', correct: false, explain: 'เป็นการจัดเรียง ไม่ใช่การวิเคราะห์ปัจจัย' },
+          { text: 'ลบนักเรียนที่มาสายออกจากข้อมูลทั้งหมด', correct: false, explain: 'ทำให้ข้อมูลสำคัญหายไปและไม่ตอบคำถาม' }
+        ]
+      },
+      {
+        key: 'visualize', icon: '🖼️', title: 'ด่านที่ 5: สื่อสารด้วยภาพ', short: 'สื่อสารผลลัพธ์',
+        prompt: 'พบว่าต้องการเปรียบเทียบจำนวนนักเรียนมาสายตามวิธีเดินทาง เลือกรูปแบบภาพที่ทำให้ผู้บริหารเข้าใจเร็วที่สุด',
+        hint: 'เลือกกราฟที่เหมาะสมที่สุด', type: 'chart', need: 1, points: 18,
+        charts: [
+          { title: 'กราฟแท่งเปรียบเทียบ', correct: true, explain: 'เหมาะกับการเปรียบเทียบจำนวนระหว่างกลุ่ม', svg: 'bar' },
+          { title: 'กราฟวงกลม', correct: false, explain: 'ใช้ดูสัดส่วนได้ แต่เปรียบเทียบหลายกลุ่มไม่ชัดเท่ากราฟแท่ง', svg: 'pie' },
+          { title: 'กราฟเส้นเวลา', correct: false, explain: 'เหมาะกับแนวโน้มตามเวลา ไม่ใช่การเปรียบเทียบกลุ่มหลัก', svg: 'line' },
+          { title: 'ตารางตัวเลขล้วน', correct: false, explain: 'อ่านละเอียดได้ แต่สื่อสารเร็วสู้ภาพเปรียบเทียบไม่ได้', svg: 'table' }
+        ]
+      },
+      {
+        key: 'order', icon: '🧭', title: 'ด่านสุดท้าย: เรียงลำดับกระบวนการ', short: 'ลำดับขั้นตอน',
+        prompt: 'เลือกขั้นตอนของกระบวนการวิทยาการข้อมูลตามลำดับที่ถูกต้อง ตั้งแต่ 1 ถึง 5',
+        hint: 'เลือกทีละข้อ: ตั้งคำถาม → รวบรวมข้อมูล → สำรวจข้อมูล → วิเคราะห์ข้อมูล → สื่อสารด้วยภาพ', type: 'order', points: 8,
+        steps: [
+          { step: 3, text: 'สำรวจข้อมูล' },
+          { step: 5, text: 'สื่อสารด้วยภาพ' },
+          { step: 1, text: 'ตั้งคำถาม' },
+          { step: 4, text: 'วิเคราะห์ข้อมูล' },
+          { step: 2, text: 'รวบรวมข้อมูล' }
+        ]
+      }
+    ];
+
+    const dom = {
+      topBar: $('#topBar'),
+      screenIntro: $('#screenIntro'),
+      screenGame: $('#screenGame'),
+      screenSummary: $('#screenSummary'),
+      stageCounter: $('#stageCounter'),
+      stageTitle: $('#stageTitle'),
+      stageInstruction: $('#stageInstruction'),
+      stageHeading: $('#stageHeading'),
+      stagePrompt: $('#stagePrompt'),
+      stageHint: $('#stageHint'),
+      stageContent: $('#stageContent'),
+      mentorIcon: $('#mentorIcon'),
+      scoreText: $('#scoreText'),
+      cameraStatus: $('#cameraStatus'),
+      toast: $('#toast'),
+      toastInner: $('#toastInner'),
+      arCursor: $('#arCursor'),
+      cameraVideo: $('#cameraVideo'),
+      handCanvas: $('#handCanvas'),
+      finalScore: $('#finalScore'),
+      rankBadge: $('#rankBadge')
+    };
+
+    const game = {
+      mode: 'mouse',
+      stageIndex: 0,
+      score: 0,
+      selectedCorrect: 0,
+      orderExpected: 1,
+      completed: false,
+      ar: {
+        hands: null,
+        camera: null,
+        started: false,
+        sending: false,
+        lastFrameAt: 0,
+        lastResultAt: 0,
+        missingFrames: 0,
+        x: null,
+        y: null,
+        rawX: null,
+        rawY: null,
+        target: null,
+        targetSince: 0,
+        lastActivationAt: 0,
+        pinch: false,
+        pinchCandidate: false,
+        pinchFrames: 0,
+        pinchStartTarget: null,
+        pinchStartAt: 0,
+        pinchStartX: 0,
+        pinchStartY: 0,
+        fpsTicks: [],
+        handScore: 0
+      }
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function dist2(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.hypot(dx, dy);
+    }
+
+    function dist3(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dz = (a.z || 0) - (b.z || 0);
+      return Math.sqrt(dx * dx + dy * dy + dz * dz * 0.36);
+    }
+
+    function showScreen(name) {
+      [dom.screenIntro, dom.screenGame, dom.screenSummary].forEach(screen => screen.classList.remove('active'));
+      if (name === 'intro') dom.screenIntro.classList.add('active');
+      if (name === 'game') dom.screenGame.classList.add('active');
+      if (name === 'summary') dom.screenSummary.classList.add('active');
+    }
+
+    function toast(message, type = 'good') {
+      dom.toastInner.textContent = message;
+      const color = type === 'good'
+        ? 'bg-green-500 text-white'
+        : type === 'warn'
+          ? 'bg-amber-400 text-slate-950'
+          : 'bg-red-500 text-white';
+      dom.toastInner.className = `rounded-full px-5 py-3 text-base md:text-lg font-extrabold shadow-2xl text-center max-w-[92vw] ${color}`;
+      dom.toast.classList.add('toast-show');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => dom.toast.classList.remove('toast-show'), 1550);
+    }
+
+    function vibrate(pattern) {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    function addScore(points) {
+      game.score = Math.max(0, game.score + points);
+      dom.scoreText.textContent = String(game.score);
+      dom.scoreText.classList.remove('pulse-good');
+      void dom.scoreText.offsetWidth;
+      dom.scoreText.classList.add('pulse-good');
+    }
+
+    function setCameraStatus(text, tone = 'neutral') {
+      dom.cameraStatus.textContent = text;
+      dom.cameraStatus.className = 'mini-pill text-xs md:text-sm max-w-[42vw] truncate ' + (
+        tone === 'good' ? 'text-green-200' :
+        tone === 'warn' ? 'text-amber-200' :
+        tone === 'bad' ? 'text-red-200' : 'text-slate-200'
+      );
+    }
+
+    function startGame(mode) {
+      game.mode = mode;
+      game.stageIndex = 0;
+      game.score = 0;
+      game.completed = false;
+      dom.scoreText.textContent = '0';
+      dom.topBar.classList.remove('hidden');
+      dom.topBar.classList.add('flex');
+      showScreen('game');
+      renderStage();
+
+      if (mode === 'ar') {
+        startAR().catch(error => {
+          console.error(error);
+          game.mode = 'mouse';
+          document.body.classList.remove('camera-on');
+          dom.arCursor.classList.remove('visible');
+          setCameraStatus('เปิดกล้องไม่ได้ · ใช้เมาส์/สัมผัส', 'bad');
+          toast('เปิดกล้องไม่ได้ ระบบเปลี่ยนเป็นเมาส์/สัมผัส', 'bad');
+        });
+      } else {
+        setCameraStatus('โหมดเมาส์/สัมผัส', 'neutral');
+        dom.arCursor.classList.remove('visible');
+      }
+    }
+
+    function resetStageRuntime() {
+      game.selectedCorrect = 0;
+      game.orderExpected = 1;
+      clearAim();
+    }
+
+    function renderStage() {
+      resetStageRuntime();
+      const stage = STAGES[game.stageIndex];
+      dom.stageCounter.textContent = `${game.stageIndex + 1}/${STAGES.length}`;
+      dom.stageTitle.textContent = stage.short;
+      dom.stageInstruction.textContent = stage.prompt;
+      dom.mentorIcon.textContent = stage.icon;
+      dom.stageHeading.textContent = stage.title;
+      dom.stagePrompt.textContent = stage.prompt;
+      dom.stageHint.textContent = stage.hint || '';
+      dom.stageContent.innerHTML = '';
+
+      if (stage.type === 'multi' || stage.type === 'single') renderChoices(stage);
+      if (stage.type === 'table') renderTable(stage);
+      if (stage.type === 'chart') renderCharts(stage);
+      if (stage.type === 'order') renderOrder(stage);
+    }
+
+    function targetTemplate(content, attrs = '') {
+      return `<button type="button" class="game-target glass-soft rounded-3xl border border-white/15 p-4 md:p-6 text-left min-h-[5.8rem] w-full" ${attrs}>
+        <span class="target-badge" aria-hidden="true"></span>
+        ${content}
+      </button>`;
+    }
+
+    function renderChoices(stage) {
+      const html = `<div class="choice-grid mt-2 pb-3">
+        ${stage.choices.map((choice, index) => targetTemplate(`
+          <div class="pr-8">
+            <div class="text-base md:text-xl font-black text-white leading-relaxed">${escapeHtml(choice.text)}</div>
+            <div class="mt-2 text-xs md:text-sm text-slate-300">เล็งค้างเพื่อเลือก หรือคลิก/แตะ</div>
+          </div>
+        `, `data-kind="choice" data-index="${index}" data-correct="${choice.correct}" aria-label="${escapeAttr(choice.text)}"`)).join('')}
+      </div>`;
+      dom.stageContent.innerHTML = html;
+    }
+
+    function renderTable(stage) {
+      dom.stageContent.innerHTML = `
+        <div class="mt-2 overflow-x-auto rounded-3xl border border-white/15">
+          <table class="w-full min-w-[680px] text-center border-collapse">
+            <thead class="bg-sky-500/20 text-sky-100">
+              <tr>
+                <th class="p-3 md:p-4 text-base md:text-lg">วันที่</th>
+                <th class="p-3 md:p-4 text-base md:text-lg">ระดับชั้น</th>
+                <th class="p-3 md:p-4 text-base md:text-lg">เวลาเข้า</th>
+                <th class="p-3 md:p-4 text-base md:text-lg">สถานะ</th>
+                <th class="p-3 md:p-4 text-base md:text-lg">การตรวจสอบ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stage.rows.map((row, index) => `
+                <tr class="game-target border-t border-white/10 cursor-pointer" tabindex="0" role="button" data-kind="row" data-index="${index}" data-correct="${row.correct}" aria-label="ตรวจแถว ${escapeAttr(row.day)} ${escapeAttr(row.level)} ${escapeAttr(row.time)}">
+                  <td class="p-3 md:p-4 font-bold">${escapeHtml(row.day)}</td>
+                  <td class="p-3 md:p-4 ${row.correct ? 'text-amber-100 font-black' : ''}">${escapeHtml(row.level)}</td>
+                  <td class="p-3 md:p-4 ${row.correct ? 'text-amber-100 font-black' : ''}">${escapeHtml(row.time)}</td>
+                  <td class="p-3 md:p-4">${escapeHtml(row.status)}</td>
+                  <td class="p-3 md:p-4 text-slate-300">เล็งค้าง/คลิกเพื่อตรวจ</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-4 text-sm md:text-base text-slate-300">ระบบตั้งใจทำให้ทั้งแถวเป็นเป้าหมายขนาดใหญ่ เพื่อลดการคลิกพลาดในโหมดกล้อง</p>
+      `;
+    }
+
+    function chartSvg(type) {
+      if (type === 'bar') {
+        return `<svg viewBox="0 0 260 150" class="w-full h-36" aria-hidden="true">
+          <rect x="18" y="16" width="224" height="112" rx="16" fill="rgba(255,255,255,.08)"/>
+          <line x1="42" y1="118" x2="222" y2="118" stroke="rgba(255,255,255,.5)" stroke-width="3"/>
+          <rect x="58" y="82" width="28" height="36" rx="6" fill="#38bdf8"/>
+          <rect x="102" y="58" width="28" height="60" rx="6" fill="#a78bfa"/>
+          <rect x="146" y="32" width="28" height="86" rx="6" fill="#f87171"/>
+          <rect x="190" y="70" width="28" height="48" rx="6" fill="#34d399"/>
+        </svg>`;
+      }
+      if (type === 'pie') {
+        return `<svg viewBox="0 0 260 150" class="w-full h-36" aria-hidden="true">
+          <circle cx="130" cy="75" r="48" fill="none" stroke="#38bdf8" stroke-width="28" stroke-dasharray="90 210" transform="rotate(-90 130 75)"/>
+          <circle cx="130" cy="75" r="48" fill="none" stroke="#a78bfa" stroke-width="28" stroke-dasharray="75 225" stroke-dashoffset="-90" transform="rotate(-90 130 75)"/>
+          <circle cx="130" cy="75" r="48" fill="none" stroke="#facc15" stroke-width="28" stroke-dasharray="60 240" stroke-dashoffset="-165" transform="rotate(-90 130 75)"/>
+          <circle cx="130" cy="75" r="28" fill="rgba(15,23,42,.85)"/>
+        </svg>`;
+      }
+      if (type === 'line') {
+        return `<svg viewBox="0 0 260 150" class="w-full h-36" aria-hidden="true">
+          <rect x="18" y="16" width="224" height="112" rx="16" fill="rgba(255,255,255,.08)"/>
+          <path d="M42 106 C70 72 88 92 112 58 S164 46 190 82 S218 60 230 44" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="42" cy="106" r="6" fill="#facc15"/><circle cx="112" cy="58" r="6" fill="#facc15"/><circle cx="190" cy="82" r="6" fill="#facc15"/><circle cx="230" cy="44" r="6" fill="#facc15"/>
+        </svg>`;
+      }
+      return `<svg viewBox="0 0 260 150" class="w-full h-36" aria-hidden="true">
+        <rect x="38" y="28" width="184" height="96" rx="12" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.35)"/>
+        ${[0,1,2,3].map(i => `<line x1="38" x2="222" y1="${52 + i*18}" y2="${52 + i*18}" stroke="rgba(255,255,255,.22)"/>`).join('')}
+        ${[0,1,2].map(i => `<line y1="28" y2="124" x1="${84 + i*46}" x2="${84 + i*46}" stroke="rgba(255,255,255,.22)"/>`).join('')}
+      </svg>`;
+    }
+
+    function renderCharts(stage) {
+      dom.stageContent.innerHTML = `<div class="choice-grid mt-2 pb-3">
+        ${stage.charts.map((chart, index) => targetTemplate(`
+          ${chartSvg(chart.svg)}
+          <div class="pr-8 mt-2">
+            <div class="text-xl md:text-2xl font-black text-white">${escapeHtml(chart.title)}</div>
+            <div class="mt-1 text-sm text-slate-300">เล็งค้างเพื่อเลือก</div>
+          </div>
+        `, `data-kind="chart" data-index="${index}" data-correct="${chart.correct}" aria-label="${escapeAttr(chart.title)}"`)).join('')}
+      </div>`;
+    }
+
+    function renderOrder(stage) {
+      dom.stageContent.innerHTML = `
+        <div class="mt-2 rounded-3xl border border-white/15 bg-white/7 p-3 md:p-5">
+          <div id="orderSlots" class="grid grid-cols-5 gap-2 md:gap-3">
+            ${[1,2,3,4,5].map(n => `<div id="slot${n}" class="min-h-[4.2rem] rounded-2xl border-2 border-dashed border-slate-500/70 grid place-items-center text-slate-400 font-black text-sm md:text-lg text-center px-2">${n}</div>`).join('')}
+          </div>
+        </div>
+        <div class="choice-grid mt-5 pb-3">
+          ${stage.steps.map((item, index) => targetTemplate(`
+            <div class="pr-8">
+              <div class="text-xl md:text-2xl font-black text-white">${escapeHtml(item.text)}</div>
+              <div class="mt-1 text-sm text-slate-300">เลือกเมื่อตรงกับลำดับที่ ${game.orderExpected}</div>
             </div>
+          `, `data-kind="order" data-index="${index}" data-step="${item.step}" aria-label="ขั้นตอน ${escapeAttr(item.text)}"`)).join('')}
+        </div>
+      `;
+    }
 
-            <!-- 3. Stage 3: Explore -->
-            <div id="screen-stage3" class="hidden absolute inset-0 flex flex-col items-center p-4">
-                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
-                    <div class="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
-                    <p class="text-lg">"ได้ข้อมูลมาแล้ว! แต่เดี๋ยวก่อน ต้องทำ <b>การสำรวจข้อมูล (Data Exploration)</b> คลิก/จับที่ข้อมูลที่ผิดปกติ (Outlier, Missing, Error) เพื่อกำจัดทิ้ง"</p>
-                </div>
+    function activateTarget(target, source = 'mouse') {
+      if (!target || target.classList.contains('disabled') || game.completed) return;
+      const now = performance.now();
+      if (source === 'ar' && now - game.ar.lastActivationAt < CONFIG.arActivationCooldownMs) return;
+      if (source === 'ar') game.ar.lastActivationAt = now;
 
-                <div class="glass w-full max-w-4xl rounded-xl overflow-hidden mt-4 text-lg">
-                    <table class="w-full text-center">
-                        <thead class="bg-blue-900/80 text-white">
-                            <tr>
-                                <th class="py-3">วันที่</th>
-                                <th class="py-3">ระดับชั้น</th>
-                                <th class="py-3">เวลาเข้า</th>
-                                <th class="py-3">สถานะ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="border-b border-white/20 hover:bg-white/10">
-                                <td class="py-3">จันทร์</td><td>ม.5</td><td>07:45</td><td>ปกติ</td>
-                            </tr>
-                            <tr class="row-s3 border-b border-white/20 hover:bg-red-500/40 cursor-pointer" data-error="true">
-                                <td class="py-3 text-red-300">อังคาร</td><td class="text-red-300">ม.99</td><td class="text-red-300">08:05</td><td class="text-red-300">สาย</td>
-                            </tr>
-                            <tr class="border-b border-white/20 hover:bg-white/10">
-                                <td class="py-3">พุธ</td><td>ม.4</td><td>08:10</td><td>สาย</td>
-                            </tr>
-                            <tr class="row-s3 border-b border-white/20 hover:bg-red-500/40 cursor-pointer" data-error="true">
-                                <td class="py-3 text-red-300">พฤหัส</td><td class="text-red-300">ม.6</td><td class="text-red-300">--:--</td><td class="text-red-300">ว่างเปล่า</td>
-                            </tr>
-                            <tr class="row-s3 border-b border-white/20 hover:bg-red-500/40 cursor-pointer" data-error="true">
-                                <td class="py-3 text-red-300">ศุกร์</td><td class="text-red-300">ม.5</td><td class="text-red-300">25:99</td><td class="text-red-300">สาย</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+      const stage = STAGES[game.stageIndex];
+      const kind = target.dataset.kind;
 
-            <!-- 4. Stage 4: Analyze -->
-            <div id="screen-stage4" class="hidden absolute inset-0 flex flex-col items-center p-4">
-                 <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
-                    <div class="w-16 h-16 bg-purple-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
-                    <p class="text-lg">"ถึงเวลา <b>การวิเคราะห์ข้อมูล</b> เลือกจับคู่วิธีวิเคราะห์ให้ตรงกับเป้าหมายของเรา (คลิกคำถาม แล้วคลิกวิธีที่ใช่)"</p>
-                </div>
+      if (kind === 'choice') {
+        const choice = stage.choices[Number(target.dataset.index)];
+        handleCorrectWrong(target, choice.correct, choice.explain, stage.points, stage.type === 'multi');
+      } else if (kind === 'row') {
+        const row = stage.rows[Number(target.dataset.index)];
+        handleCorrectWrong(target, row.correct, row.reason || 'แถวนี้เป็นข้อมูลปกติ', stage.points, true);
+      } else if (kind === 'chart') {
+        const chart = stage.charts[Number(target.dataset.index)];
+        handleCorrectWrong(target, chart.correct, chart.explain, stage.points, false);
+      } else if (kind === 'order') {
+        handleOrder(target, Number(target.dataset.step));
+      }
 
-                <div class="flex w-full max-w-5xl justify-between mt-8 gap-8">
-                    <!-- Question -->
-                    <div class="w-1/2 space-y-6">
-                        <h3 class="text-2xl font-bold text-center text-blue-300 mb-4">สิ่งที่อยากรู้</h3>
-                        <div class="glass p-6 rounded-xl border-2 border-yellow-400 bg-yellow-400/20 text-xl text-center">
-                            ปัจจัยใด (เช่น วิธีเดินทาง, ระดับชั้น) สัมพันธ์กับการมาสายมากที่สุด?
-                        </div>
-                    </div>
-                    
-                    <!-- Methods -->
-                    <div class="w-1/2 space-y-4">
-                        <h3 class="text-2xl font-bold text-center text-purple-300 mb-4">วิธีวิเคราะห์</h3>
-                        <button class="btn-s4 w-full glass p-4 rounded-xl text-lg hover:bg-purple-600/50 text-left transition" data-correct="false">
-                            A. หาค่าเฉลี่ยอายุของนักเรียนทั้งโรงเรียน
-                        </button>
-                        <button class="btn-s4 w-full glass p-4 rounded-xl text-lg hover:bg-purple-600/50 text-left transition" data-correct="true">
-                            B. จัดกลุ่มจำนวนคนมาสาย แยกตามวิธีเดินทางและระดับชั้น เพื่อเปรียบเทียบ
-                        </button>
-                        <button class="btn-s4 w-full glass p-4 rounded-xl text-lg hover:bg-purple-600/50 text-left transition" data-correct="false">
-                            C. เรียงลำดับชื่อนักเรียนตามตัวอักษร ก-ฮ
-                        </button>
-                    </div>
-                </div>
-            </div>
+      clearAim();
+    }
 
-            <!-- 5. Stage 5: Visualize -->
-            <div id="screen-stage5" class="hidden absolute inset-0 flex flex-col items-center p-4">
-                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-4">
-                    <div class="w-16 h-16 bg-pink-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🤖</div>
-                    <p class="text-lg">"ขั้นสุดท้าย! <b>การสื่อสารและทำผลลัพธ์ให้เป็นภาพ</b> เราพบว่าเด็กนั่งรถเมล์มาสายเยอะสุด จะนำเสนอด้วยกราฟแบบไหนให้ ผอ. เข้าใจง่ายที่สุด?"</p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl mt-8">
-                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" role="button" tabindex="0" data-correct="true">
-                        <div class="w-48 h-32 bg-white/10 rounded flex items-end justify-center gap-2 p-4">
-                            <div class="w-8 bg-blue-400 h-1/3"></div>
-                            <div class="w-8 bg-blue-400 h-2/3"></div>
-                            <div class="w-8 bg-red-400 h-full"></div> <!-- รถเมล์ -->
-                            <div class="w-8 bg-blue-400 h-1/2"></div>
-                        </div>
-                        <p class="mt-4 text-xl font-bold">กราฟแท่งเปรียบเทียบ</p>
-                    </div>
-                    
-                    <div class="btn-s5 glass p-6 rounded-2xl cursor-pointer hover:bg-pink-500/30 flex flex-col items-center transition" role="button" tabindex="0" data-correct="false">
-                        <div class="w-32 h-32 rounded-full border-8 border-t-blue-400 border-r-green-400 border-b-yellow-400 border-l-purple-400"></div>
-                        <p class="mt-4 text-xl font-bold">กราฟวงกลม (สัดส่วน)</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Final Challenge: Ordering -->
-            <div id="screen-final" class="hidden absolute inset-0 flex flex-col items-center p-4">
-                <div class="glass-dark p-4 rounded-xl w-full max-w-3xl flex gap-4 items-center mb-2">
-                    <div class="w-16 h-16 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-3xl shadow-lg shrink-0">🏆</div>
-                    <p class="text-lg">"ด่านสุดท้าย! จัดเรียง 5 ขั้นตอนของกระบวนการวิทยาการข้อมูลให้ถูกต้อง (คลิกเลือกตามลำดับ 1 ถึง 5)"</p>
-                </div>
-
-                <!-- Target Slots -->
-                <div class="flex gap-2 w-full max-w-5xl justify-center mb-8 h-20 items-end">
-                    <div id="slot-1" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">1</div>
-                    <div class="text-2xl text-white pt-4">➔</div>
-                    <div id="slot-2" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">2</div>
-                    <div class="text-2xl text-white pt-4">➔</div>
-                    <div id="slot-3" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">3</div>
-                    <div class="text-2xl text-white pt-4">➔</div>
-                    <div id="slot-4" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">4</div>
-                    <div class="text-2xl text-white pt-4">➔</div>
-                    <div id="slot-5" class="w-1/5 h-16 border-b-4 border-dashed border-gray-400 flex items-center justify-center text-xl font-bold text-gray-400">5</div>
-                </div>
-
-                <!-- Choices -->
-                <div id="final-choices" class="flex flex-wrap justify-center gap-4 max-w-4xl">
-                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="3">สำรวจข้อมูล</button>
-                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="5">สื่อสารด้วยภาพ</button>
-                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="1">ตั้งคำถาม</button>
-                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="4">วิเคราะห์ข้อมูล</button>
-                    <button class="btn-final glass px-6 py-4 rounded-xl text-xl hover:bg-yellow-500/50 transition" data-step="2">รวบรวมข้อมูล</button>
-                </div>
-            </div>
-
-            <!-- Summary Screen -->
-            <div id="screen-summary" class="hidden absolute inset-0 flex flex-col items-center justify-center p-4">
-                <div class="glass rounded-3xl p-10 max-w-3xl w-full text-center space-y-6 bg-slate-900/80">
-                    <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">ภารกิจสำเร็จ!</h1>
-                    
-                    <div class="py-6">
-                        <p class="text-2xl text-gray-300">คะแนนของคุณ</p>
-                        <p class="text-7xl font-black text-white my-4" id="final-score">100</p>
-                        <div class="inline-block px-6 py-2 rounded-full text-2xl font-bold mt-2" id="rank-badge">
-                            ระดับ: Data Scientist Master
-                        </div>
-                    </div>
-
-                    <div class="text-left bg-black/30 p-6 rounded-xl border border-white/10">
-                        <h3 class="text-xl font-bold text-blue-300 mb-2">สรุป 5 ขั้นตอน (Data Science Process)</h3>
-                        <ol class="list-decimal list-inside text-lg space-y-2 text-gray-300">
-                            <li><b class="text-white">Ask:</b> ตั้งคำถามที่ชัดเจน</li>
-                            <li><b class="text-white">Collect:</b> เก็บรวบรวมข้อมูลที่เกี่ยวข้อง</li>
-                            <li><b class="text-white">Explore:</b> สำรวจและทำความสะอาดข้อมูล</li>
-                            <li><b class="text-white">Analyze:</b> วิเคราะห์เพื่อหาคำตอบ</li>
-                            <li><b class="text-white">Visualize:</b> สื่อสารและนำเสนอด้วยภาพ</li>
-                        </ol>
-                    </div>
-
-                    <button onclick="location.reload()" class="mt-8 bg-blue-600 hover:bg-blue-500 text-white py-4 px-10 rounded-xl font-bold text-xl shadow-lg transition-all hover:scale-105">
-                        เล่นอีกครั้ง
-                    </button>
-                </div>
-            </div>
-
-        </main>
-    </div>
-
-    <!-- Game Logic -->
-    <script>
-        // --- Game State ---
-        let state = {
-            mode: 'mouse', // 'ar' or 'mouse'
-            stage: 0,
-            score: 0,
-            s2Collected: 0,
-            s3Removed: 0,
-            finalOrderIndex: 1,
-            isPinching: false,
-            pinchCandidate: false,
-            pinchStableFrames: 0,
-            pointerX: null,
-            pointerY: null,
-            pointerVX: 0,
-            pointerVY: 0,
-            lastPointerAt: 0,
-            missingHandFrames: 0,
-            visibleHandFrames: 0,
-            stableHandLabel: null,
-            draggedElement: null,
-            dragOffsetX: 0,
-            dragOffsetY: 0,
-            activePointerId: null,
-            pendingClickTarget: null,
-            pendingClickStartX: 0,
-            pendingClickStartY: 0,
-            pendingClickStartedAt: 0,
-            lastSyntheticClickAt: 0
-        };
-
-        const stageInfo = [
-            { id: 'intro', title: '', desc: '' },
-            { id: 'stage1', title: 'จุดประกายคำถาม', desc: 'เลือกคำถามที่ดีที่สุด' },
-            { id: 'stage2', title: 'ตามล่าข้อมูล', desc: 'รวบรวมข้อมูลที่เกี่ยวข้อง' },
-            { id: 'stage3', title: 'ตรวจสุขภาพข้อมูล', desc: 'กำจัดข้อมูลที่ผิดปกติ' },
-            { id: 'stage4', title: 'ถอดรหัสคำตอบ', desc: 'เลือกวิธีวิเคราะห์' },
-            { id: 'stage5', title: 'เล่าเรื่องด้วยภาพ', desc: 'เลือกกราฟนำเสนอ' },
-            { id: 'final', title: 'เส้นทางนักวิทยาการข้อมูล', desc: 'จัดเรียง 5 ขั้นตอน' },
-            { id: 'summary', title: '', desc: '' }
-        ];
-
-        // --- DOM Elements ---
-        const uiCursor = document.getElementById('ar-cursor');
-        const notif = document.getElementById('notification');
-        const notifContent = document.getElementById('notif-content');
-        const scoreDisplay = document.getElementById('score-display');
-        const cameraStatus = document.getElementById('camera-status');
-        const camDot = document.getElementById('cam-dot');
-        const camPing = document.getElementById('cam-ping');
-        const camText = document.getElementById('cam-text');
-
-        // --- Core Functions ---
-
-        async function startGame(useAR) {
-            state.mode = useAR ? 'ar' : 'mouse';
-            document.getElementById('status-bar').classList.remove('hidden');
-
-            if (useAR) {
-                setCameraStatus('loading', 'กำลังเปิดกล้อง...');
-                const started = await initMediaPipe();
-                if (started) {
-                    uiCursor.style.display = 'block';
-                    setCameraStatus('ready', 'AR พร้อมใช้งาน');
-                } else {
-                    state.mode = 'mouse';
-                    uiCursor.style.display = 'none';
-                    setCameraStatus('mouse', 'เปิดกล้องไม่ได้ / ใช้เมาส์หรือสัมผัสแทน');
-                    showNotif('ไม่สามารถเปิดกล้องได้ ระบบเปลี่ยนเป็นโหมดเมาส์/สัมผัส', false);
-                }
-            } else {
-                uiCursor.style.display = 'none';
-                setCameraStatus('mouse', 'ใช้เมาส์ / สัมผัสหน้าจอ');
-            }
-
-            goToStage(1);
+    function handleCorrectWrong(target, isCorrect, explain, points, isMulti) {
+      const badge = $('.target-badge', target);
+      if (isCorrect) {
+        target.classList.add('correct-selected', 'disabled');
+        if (badge) badge.textContent = '✅';
+        addScore(points);
+        game.selectedCorrect++;
+        toast(explain || 'ถูกต้อง!', 'good');
+        vibrate(50);
+        if (!isMulti || game.selectedCorrect >= (STAGES[game.stageIndex].need || 1)) {
+          setTimeout(nextStage, 900);
         }
-
-        function setCameraStatus(type, text) {
-            camText.innerText = text;
-            cameraStatus.className = 'flex items-center gap-2 px-3 py-1 rounded-full text-sm';
-            camDot.className = 'relative inline-flex rounded-full h-3 w-3';
-            camPing.className = 'absolute inline-flex h-full w-full rounded-full opacity-75';
-
-            if (type === 'ready') {
-                cameraStatus.classList.add('text-green-400', 'bg-green-400/20');
-                camDot.classList.add('bg-green-500');
-                camPing.classList.add('animate-ping', 'bg-green-400');
-            } else if (type === 'loading') {
-                cameraStatus.classList.add('text-yellow-300', 'bg-yellow-400/20');
-                camDot.classList.add('bg-yellow-400');
-                camPing.classList.add('animate-ping', 'bg-yellow-300');
-            } else if (type === 'searching') {
-                cameraStatus.classList.add('text-orange-300', 'bg-orange-400/20');
-                camDot.classList.add('bg-orange-400');
-                camPing.classList.add('animate-ping', 'bg-orange-300');
-            } else {
-                cameraStatus.classList.add('text-gray-300', 'bg-gray-400/20');
-                camDot.classList.add('bg-gray-500');
-                camPing.classList.add('hidden', 'bg-gray-400');
-            }
-        }
-
-        function goToStage(stageNum) {
-            // Hide all screens
-            document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
-            
-            state.stage = stageNum;
-            const info = stageInfo[stageNum];
-            
-            document.getElementById(`screen-${info.id}`).classList.remove('hidden');
-            document.getElementById('current-stage-display').innerText = stageNum <= 5 ? stageNum : (stageNum === 6 ? 'Final' : '-');
-            document.getElementById('stage-title').innerText = info.title;
-            document.getElementById('stage-desc').innerText = info.desc;
-
-            if (stageNum === 7) showSummary();
-        }
-
-        function updateScore(points) {
-            state.score += points;
-            scoreDisplay.innerText = state.score;
-            scoreDisplay.classList.add('scale-150', 'text-green-400');
-            setTimeout(() => scoreDisplay.classList.remove('scale-150', 'text-green-400'), 300);
-        }
-
-        function showNotif(msg, isSuccess) {
-            notifContent.innerText = msg;
-            notifContent.className = `px-6 py-3 rounded-full text-lg font-bold shadow-lg text-center ${isSuccess ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
-            notif.classList.remove('opacity-0', '-translate-y-10');
-            setTimeout(() => notif.classList.add('opacity-0', '-translate-y-10'), 2000);
-        }
-
-        // --- AR & MediaPipe System ---
-        let hands, camera;
-        const arRuntime = {
-            processingFrame: false,
-            lastStatusAt: 0,
-            lastFrameSentAt: 0,
-            targetFrameInterval: 33, // ~30 FPS: เร็วพอสำหรับเกม และไม่หนักจน MediaPipe สะสมคิว
-            lastLandmarkAt: 0
-        };
-
-        async function initMediaPipe() {
-            const videoElement = document.getElementById('webcam');
-
-            try {
-                hands = new Hands({ locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-                }});
-
-                const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-                const prefersLowPower = isMobile || navigator.hardwareConcurrency <= 4;
-
-                hands.setOptions({
-                    maxNumHands: 1,
-                    modelComplexity: prefersLowPower ? 0 : 1,
-                    minDetectionConfidence: prefersLowPower ? 0.58 : 0.64,
-                    minTrackingConfidence: prefersLowPower ? 0.62 : 0.68
-                });
-
-                hands.onResults(onARResults);
-
-                camera = new Camera(videoElement, {
-                    onFrame: async () => {
-                        const now = performance.now();
-                        if (arRuntime.processingFrame || now - arRuntime.lastFrameSentAt < arRuntime.targetFrameInterval) return;
-                        if (videoElement.readyState < 2) return;
-
-                        arRuntime.processingFrame = true;
-                        arRuntime.lastFrameSentAt = now;
-                        try {
-                            await hands.send({ image: videoElement });
-                        } catch (error) {
-                            console.warn('MediaPipe frame skipped:', error);
-                        } finally {
-                            arRuntime.processingFrame = false;
-                        }
-                    },
-                    // 640x480 ให้ latency ต่ำกว่า 960x540 และช่วยให้มือถือ/โน้ตบุ๊กเก่าตรวจจับต่อเนื่องขึ้น
-                    width: 640,
-                    height: 480
-                });
-
-                await camera.start();
-                return true;
-            } catch (error) {
-                console.error('Camera / MediaPipe error:', error);
-                return false;
-            }
-        }
-
-        function distance2D(a, b) {
-            return Math.hypot(a.x - b.x, a.y - b.y);
-        }
-
-        function distance3D(a, b) {
-            return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
-        }
-
-        function lerpLandmark(a, b, weightA = 0.72) {
-            return {
-                x: (a.x * weightA) + (b.x * (1 - weightA)),
-                y: (a.y * weightA) + (b.y * (1 - weightA)),
-                z: ((a.z || 0) * weightA) + ((b.z || 0) * (1 - weightA))
-            };
-        }
-
-        function clamp(value, min, max) {
-            return Math.max(min, Math.min(max, value));
-        }
-
-        function landmarkToScreen(landmark) {
-            const videoElement = document.getElementById('webcam');
-            const rect = videoElement.getBoundingClientRect();
-            const videoWidth = videoElement.videoWidth || 640;
-            const videoHeight = videoElement.videoHeight || 480;
-            const videoAspect = videoWidth / videoHeight;
-            const screenAspect = rect.width / rect.height;
-
-            let drawWidth = rect.width;
-            let drawHeight = rect.height;
-            let offsetX = rect.left;
-            let offsetY = rect.top;
-
-            // Match CSS object-fit: cover so cursor position aligns on phones/tablets/desktop.
-            if (screenAspect > videoAspect) {
-                drawWidth = rect.width;
-                drawHeight = rect.width / videoAspect;
-                offsetY = rect.top + (rect.height - drawHeight) / 2;
-            } else {
-                drawHeight = rect.height;
-                drawWidth = rect.height * videoAspect;
-                offsetX = rect.left + (rect.width - drawWidth) / 2;
-            }
-
-            const x = offsetX + (1 - landmark.x) * drawWidth; // Mirror X to match selfie video.
-            const y = offsetY + landmark.y * drawHeight;
-            return {
-                x: clamp(x, 0, window.innerWidth - 1),
-                y: clamp(y, 0, window.innerHeight - 1)
-            };
-        }
-
-        function smoothPointer(rawX, rawY) {
-            const now = performance.now();
-            const dt = state.lastPointerAt ? Math.max(16, now - state.lastPointerAt) : 33;
-            state.lastPointerAt = now;
-
-            if (state.pointerX === null || state.pointerY === null) {
-                state.pointerX = rawX;
-                state.pointerY = rawY;
-                state.pointerVX = 0;
-                state.pointerVY = 0;
-                return { x: state.pointerX, y: state.pointerY };
-            }
-
-            const dx = rawX - state.pointerX;
-            const dy = rawY - state.pointerY;
-            const dist = Math.hypot(dx, dy);
-
-            // Dead zone ลดอาการ cursor สั่นเมื่อมือหยุดนิ่ง แต่ยังคงความไวเมื่อผู้เล่นลากวัตถุ
-            if (!state.draggedElement && dist < 1.75) {
-                return { x: state.pointerX, y: state.pointerY };
-            }
-
-            // Dynamic smoothing: เคลื่อนที่ไกลให้ตามไว เคลื่อนที่น้อยให้กรองสั่นมากขึ้น
-            const speed = dist / dt;
-            const baseAlpha = state.draggedElement ? 0.62 : 0.26;
-            const speedBoost = clamp(speed * 5.2, 0, state.draggedElement ? 0.22 : 0.34);
-            const alpha = clamp(baseAlpha + speedBoost, 0.22, state.draggedElement ? 0.78 : 0.58);
-
-            const nextX = state.pointerX + dx * alpha;
-            const nextY = state.pointerY + dy * alpha;
-            state.pointerVX = (nextX - state.pointerX) / dt;
-            state.pointerVY = (nextY - state.pointerY) / dt;
-            state.pointerX = nextX;
-            state.pointerY = nextY;
-            return { x: state.pointerX, y: state.pointerY };
-        }
-
-        function readPinchState(landmarks) {
-            const thumbTip = landmarks[4];
-            const indexTip = landmarks[8];
-            const thumbIp = landmarks[3];
-            const indexDip = landmarks[7];
-            const indexMcp = landmarks[5];
-            const pinkyMcp = landmarks[17];
-            const wrist = landmarks[0];
-            const middleMcp = landmarks[9];
-
-            const palmWidth2D = Math.max(distance2D(indexMcp, pinkyMcp), distance2D(wrist, middleMcp), 0.065);
-            const palmWidth3D = Math.max(distance3D(indexMcp, pinkyMcp), distance3D(wrist, middleMcp), 0.065);
-            const pinchRatio2D = distance2D(thumbTip, indexTip) / palmWidth2D;
-            const pinchRatio3D = distance3D(thumbTip, indexTip) / palmWidth3D;
-            const fingerFoldRatio = distance2D(thumbIp, indexDip) / palmWidth2D;
-
-            // ใช้ทั้ง 2D/3D และจุดข้อกลางนิ้ว เพื่อกัน false positive เวลานิ้วซ้อนกันจากมุมกล้อง
-            const closeEnough = pinchRatio2D < 0.40 && pinchRatio3D < 0.52 && fingerFoldRatio < 0.56;
-            const stillClose = pinchRatio2D < 0.58 && pinchRatio3D < 0.72 && fingerFoldRatio < 0.76;
-            const nextCandidate = state.isPinching ? stillClose : closeEnough;
-
-            if (nextCandidate === state.pinchCandidate) {
-                state.pinchStableFrames++;
-            } else {
-                state.pinchCandidate = nextCandidate;
-                state.pinchStableFrames = 1;
-            }
-
-            // เริ่มจีบต้องนิ่ง 2 เฟรม, ปล่อยนิ้วต้องชัด 2 เฟรม จึงไม่กระพริบระหว่างลาก
-            return state.pinchStableFrames >= 2 ? state.pinchCandidate : state.isPinching;
-        }
-
-        function resetARGesture() {
-            if (state.isPinching && state.pointerX !== null && state.pointerY !== null) {
-                handleInteraction(state.pointerX, state.pointerY, 'end');
-            }
-            clearPendingClickHighlight();
-            state.isPinching = false;
-            state.pinchCandidate = false;
-            state.pinchStableFrames = 0;
-            uiCursor.classList.remove('pinching');
-        }
-
-        function selectPrimaryHand(results) {
-            const landmarksList = results.multiHandLandmarks || [];
-            if (!landmarksList.length) return null;
-
-            // กรณีตั้ง maxNumHands เป็น 1 จะคืนมือเดียวอยู่แล้ว แต่ฟังก์ชันนี้ทำให้รองรับการแก้เป็น 2 มือในอนาคต
-            let bestIndex = 0;
-            let bestScore = -Infinity;
-            for (let i = 0; i < landmarksList.length; i++) {
-                const hand = landmarksList[i];
-                const indexTip = hand[8];
-                const wrist = hand[0];
-                const palmSize = distance2D(hand[5], hand[17]);
-                const insideScore = (indexTip.x > 0.02 && indexTip.x < 0.98 && indexTip.y > 0.02 && indexTip.y < 0.98) ? 1 : 0;
-                const score = insideScore + palmSize - Math.abs(wrist.z || 0) * 0.05;
-                if (score > bestScore) {
-                    bestIndex = i;
-                    bestScore = score;
-                }
-            }
-            return landmarksList[bestIndex];
-        }
-
-        function onARResults(results) {
-            const landmarks = selectPrimaryHand(results);
-            if (!landmarks) {
-                state.missingHandFrames++;
-                uiCursor.classList.add('ar-hand-lost');
-                if (state.missingHandFrames > 5) {
-                    resetARGesture();
-                    if (Date.now() - arRuntime.lastStatusAt > 900) {
-                        setCameraStatus('searching', 'ไม่พบมือ / วางมือให้อยู่ในกรอบกล้อง');
-                        arRuntime.lastStatusAt = Date.now();
-                    }
-                }
-                return;
-            }
-
-            arRuntime.lastLandmarkAt = performance.now();
-            state.visibleHandFrames++;
-            state.missingHandFrames = 0;
-            uiCursor.classList.remove('ar-hand-lost');
-            if (Date.now() - arRuntime.lastStatusAt > 1000) {
-                setCameraStatus('ready', 'AR พร้อมใช้งาน');
-                arRuntime.lastStatusAt = Date.now();
-            }
-
-            // ใช้จุดผสมระหว่างปลายนิ้วชี้กับข้อ DIP เพื่อลดการสั่นของ landmark 8 แต่ยังชี้ตำแหน่งได้ตรง
-            const stableIndexPointer = lerpLandmark(landmarks[8], landmarks[7], 0.76);
-            const indexScreen = landmarkToScreen(stableIndexPointer);
-            const pointer = smoothPointer(indexScreen.x, indexScreen.y);
-
-            uiCursor.style.left = `${pointer.x}px`;
-            uiCursor.style.top = `${pointer.y}px`;
-
-            const isPinchingNow = readPinchState(landmarks);
-
-            if (isPinchingNow && !state.isPinching) {
-                uiCursor.classList.add('pinching');
-                handleInteraction(pointer.x, pointer.y, 'start');
-            } else if (!isPinchingNow && state.isPinching) {
-                uiCursor.classList.remove('pinching');
-                handleInteraction(pointer.x, pointer.y, 'end');
-            } else if (isPinchingNow && state.isPinching) {
-                handleInteraction(pointer.x, pointer.y, 'move');
-            }
-
-            state.isPinching = isPinchingNow;
-        }
-
-        // --- Interaction Engine (Unified for AR, Mouse, Touch, Stylus) ---
-        const CLICKABLE_SELECTOR = 'button, .btn-s2, .btn-s4, .btn-s5, .btn-final, .row-s3, [role="button"]';
-
-        function withHiddenCursorAndDragged(callback, options = {}) {
-            const oldCursorVisibility = uiCursor.style.visibility;
-            const oldDraggedPointerEvents = state.draggedElement ? state.draggedElement.style.pointerEvents : null;
-
-            uiCursor.style.visibility = 'hidden';
-            if (options.ignoreDragged && state.draggedElement) {
-                state.draggedElement.style.pointerEvents = 'none';
-            }
-
-            const result = callback();
-
-            if (options.ignoreDragged && state.draggedElement) {
-                state.draggedElement.style.pointerEvents = oldDraggedPointerEvents || 'auto';
-            }
-            uiCursor.style.visibility = oldCursorVisibility;
-            return result;
-        }
-
-        function sampleOffsets(radius = 0) {
-            if (!radius) return [[0, 0]];
-            return [
-                [0, 0], [-radius, 0], [radius, 0], [0, -radius], [0, radius],
-                [-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius]
-            ];
-        }
-
-        function elementAtPointSafe(x, y, options = {}) {
-            const radius = options.sampleRadius || 0;
-            const selector = options.selector || null;
-
-            return withHiddenCursorAndDragged(() => {
-                let firstElement = null;
-                for (const [dx, dy] of sampleOffsets(radius)) {
-                    const safeX = clamp(x + dx, 0, window.innerWidth - 1);
-                    const safeY = clamp(y + dy, 0, window.innerHeight - 1);
-                    const element = document.elementFromPoint(safeX, safeY);
-                    if (!firstElement) firstElement = element;
-                    if (!selector || (element && element.closest(selector))) {
-                        return element;
-                    }
-                }
-                return firstElement;
-            }, options);
-        }
-
-        function clearPendingClickHighlight() {
-            if (state.pendingClickTarget) {
-                state.pendingClickTarget.classList.remove('ar-targeted');
-            }
-            state.pendingClickTarget = null;
-            state.pendingClickStartedAt = 0;
-        }
-
-        function setPendingClickTarget(target, x, y) {
-            clearPendingClickHighlight();
-            state.pendingClickTarget = target;
-            state.pendingClickStartX = x;
-            state.pendingClickStartY = y;
-            state.pendingClickStartedAt = performance.now();
-            target.classList.add('ar-targeted');
-        }
-
-        function fireSyntheticClick(target) {
-            const now = performance.now();
-            if (!target || now - state.lastSyntheticClickAt < 180) return;
-            state.lastSyntheticClickAt = now;
-            target.click();
-        }
-
-        function startDrag(element, x, y) {
-            clearPendingClickHighlight();
-            state.draggedElement = element;
-            const rect = element.getBoundingClientRect();
-
-            state.dragOffsetX = x - rect.left;
-            state.dragOffsetY = y - rect.top;
-
-            element.style.width = `${rect.width}px`;
-            element.style.position = 'fixed';
-            element.style.left = `${rect.left}px`;
-            element.style.top = `${rect.top}px`;
-            element.classList.add('is-dragged');
-            moveDrag(x, y);
-        }
-
-        function moveDrag(x, y) {
-            if (!state.draggedElement) return;
-            state.draggedElement.style.left = `${x - state.dragOffsetX}px`;
-            state.draggedElement.style.top = `${y - state.dragOffsetY}px`;
-        }
-
-        function resetDraggedElement(element) {
-            element.classList.remove('is-dragged');
-            element.style.position = 'relative';
-            element.style.left = 'auto';
-            element.style.top = 'auto';
-            element.style.width = 'auto';
-            element.style.pointerEvents = 'auto';
-        }
-
-        function handleInteraction(x, y, action) {
-            const forgivingRadius = state.mode === 'ar' ? 30 : 0;
-
-            if (action === 'move') {
-                moveDrag(x, y);
-                if (!state.draggedElement && state.pendingClickTarget) {
-                    const targetProbe = elementAtPointSafe(x, y, { sampleRadius: forgivingRadius, selector: CLICKABLE_SELECTOR });
-                    const currentClickable = targetProbe ? targetProbe.closest(CLICKABLE_SELECTOR) : null;
-                    if (currentClickable && currentClickable !== state.pendingClickTarget) {
-                        setPendingClickTarget(currentClickable, x, y);
-                    }
-                }
-                return;
-            }
-
-            if (action === 'end') {
-                if (state.draggedElement) {
-                    const dragged = state.draggedElement;
-                    dragged.classList.remove('is-dragged');
-
-                    const dropTarget = elementAtPointSafe(x, y, { ignoreDragged: true, sampleRadius: state.mode === 'ar' ? 36 : 0, selector: '#dropzone-s1' });
-                    const dropzone = dropTarget ? dropTarget.closest('#dropzone-s1') : null;
-
-                    if (dropzone) {
-                        evaluateStage1Drop(dragged);
-                    } else {
-                        resetDraggedElement(dragged);
-                    }
-                    state.draggedElement = null;
-                    return;
-                }
-
-                if (state.pendingClickTarget) {
-                    const targetProbe = elementAtPointSafe(x, y, { sampleRadius: forgivingRadius, selector: CLICKABLE_SELECTOR });
-                    const releaseClickable = targetProbe ? targetProbe.closest(CLICKABLE_SELECTOR) : null;
-                    const moveDistance = Math.hypot(x - state.pendingClickStartX, y - state.pendingClickStartY);
-                    const targetToClick = releaseClickable || (moveDistance < 95 ? state.pendingClickTarget : null);
-                    const highlighted = state.pendingClickTarget;
-                    clearPendingClickHighlight();
-                    if (targetToClick) fireSyntheticClick(targetToClick || highlighted);
-                }
-                return;
-            }
-
-            const elUnderCursor = elementAtPointSafe(x, y, { sampleRadius: forgivingRadius, selector: `.draggable, ${CLICKABLE_SELECTOR}` });
-            if (!elUnderCursor) return;
-
-            // Drag cards must be detected before generic clickable elements.
-            const draggable = elUnderCursor.closest('.draggable');
-            if (draggable) {
-                startDrag(draggable, x, y);
-                return;
-            }
-
-            const clickable = elUnderCursor.closest(CLICKABLE_SELECTOR);
-            if (clickable) {
-                setPendingClickTarget(clickable, x, y);
-            }
-        }
-
-        function bindPointerControls() {
-            const target = document.getElementById('app');
-
-            if (window.PointerEvent) {
-                target.addEventListener('pointerdown', (e) => {
-                    if (state.mode === 'ar') return;
-                    e.preventDefault();
-                    state.activePointerId = e.pointerId;
-                    target.setPointerCapture?.(e.pointerId);
-                    handleInteraction(e.clientX, e.clientY, 'start');
-                }, { passive: false });
-
-                target.addEventListener('pointermove', (e) => {
-                    if (state.mode === 'ar' || state.activePointerId !== e.pointerId) return;
-                    e.preventDefault();
-                    handleInteraction(e.clientX, e.clientY, 'move');
-                }, { passive: false });
-
-                target.addEventListener('pointerup', (e) => {
-                    if (state.mode === 'ar' || state.activePointerId !== e.pointerId) return;
-                    e.preventDefault();
-                    handleInteraction(e.clientX, e.clientY, 'end');
-                    target.releasePointerCapture?.(e.pointerId);
-                    state.activePointerId = null;
-                }, { passive: false });
-
-                target.addEventListener('pointercancel', (e) => {
-                    if (state.mode === 'ar') return;
-                    if (state.draggedElement) handleInteraction(e.clientX, e.clientY, 'end');
-                    state.activePointerId = null;
-                });
-            } else {
-                // Legacy fallback for very old browsers.
-                document.addEventListener('mousedown', (e) => { if(state.mode !== 'ar') handleInteraction(e.clientX, e.clientY, 'start'); });
-                document.addEventListener('mousemove', (e) => { if(state.mode !== 'ar' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'move'); });
-                document.addEventListener('mouseup', (e) => { if(state.mode !== 'ar' && state.draggedElement) handleInteraction(e.clientX, e.clientY, 'end'); });
-                document.addEventListener('touchstart', (e) => { if(state.mode !== 'ar') { e.preventDefault(); handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'start'); } }, { passive: false });
-                document.addEventListener('touchmove', (e) => { if(state.mode !== 'ar' && state.draggedElement) { e.preventDefault(); handleInteraction(e.touches[0].clientX, e.touches[0].clientY, 'move'); } }, { passive: false });
-                document.addEventListener('touchend', (e) => { if(state.mode !== 'ar' && state.draggedElement) handleInteraction(e.changedTouches[0].clientX, e.changedTouches[0].clientY, 'end'); });
-            }
-        }
-
-        bindPointerControls();
-
-        // --- Stage Logics ---
-
-        // Stage 1 Logic
-        function evaluateStage1Drop(card) {
-            const isCorrect = card.dataset.correct === "true";
-            if (isCorrect) {
-                showNotif("ยอดเยี่ยม! เป็นคำถามที่วัดผลได้", true);
-                updateScore(15);
-                card.style.display = 'none'; // Remove card
-                // Check if all correct found (2 correct cards)
-                const remaining = document.querySelectorAll('.card-s1[data-correct="true"]:not([style*="display: none"])').length;
-                if(remaining === 0) {
-                    setTimeout(() => goToStage(2), 1500);
-                }
-            } else {
-                showNotif("คำถามนี้มีอคติ หรือไม่ตรงประเด็น ลองใหม่นะ", false);
-                updateScore(-5);
-                resetDraggedElement(card);
-            }
-        }
-
-        // Stage 2 Logic (Click to collect)
-        document.querySelectorAll('.btn-s2').forEach(btn => {
-            btn.addEventListener('click', function() {
-                if(this.classList.contains('opacity-50')) return; // already clicked
-                
-                const isCorrect = this.dataset.correct === "true";
-                if(isCorrect) {
-                    this.classList.add('bg-green-500', 'text-white', 'opacity-50');
-                    showNotif("เก็บข้อมูลนี้แล้ว!", true);
-                    updateScore(10);
-                    state.s2Collected++;
-                    if(state.s2Collected >= 3) {
-                        setTimeout(() => goToStage(3), 1500);
-                    }
-                } else {
-                    this.classList.add('bg-red-500', 'text-white', 'opacity-50');
-                    showNotif("ข้อมูลนี้ไม่จำเป็น หรือละเมิดความเป็นส่วนตัว!", false);
-                    updateScore(-5);
-                }
-            });
+      } else {
+        target.classList.add('wrong-selected');
+        if (badge) badge.textContent = '✕';
+        addScore(-4);
+        toast(explain || 'ยังไม่ถูกต้อง', 'bad');
+        vibrate([30, 40, 30]);
+        setTimeout(() => {
+          target.classList.remove('wrong-selected');
+          if (badge) badge.textContent = '';
+        }, 900);
+      }
+    }
+
+    function handleOrder(target, step) {
+      if (step === game.orderExpected) {
+        const text = target.textContent.trim().replace(/เลือกเมื่อตรงกับลำดับที่\s*\d+/g, '').trim();
+        const slot = $(`#slot${game.orderExpected}`);
+        slot.textContent = text;
+        slot.classList.add('slot-filled');
+        target.classList.add('correct-selected', 'disabled');
+        const badge = $('.target-badge', target);
+        if (badge) badge.textContent = '✅';
+        addScore(STAGES[game.stageIndex].points);
+        toast('ลำดับถูกต้อง!', 'good');
+        game.orderExpected++;
+
+        $$('.game-target[data-kind="order"]:not(.disabled)').forEach(btn => {
+          const sub = btn.querySelector('.text-sm');
+          if (sub) sub.textContent = game.orderExpected <= 5 ? `เลือกเมื่อตรงกับลำดับที่ ${game.orderExpected}` : 'ครบทุกขั้นตอนแล้ว';
         });
 
-        // Stage 3 Logic (Click dirty rows)
-        document.querySelectorAll('.row-s3').forEach(row => {
-            row.addEventListener('click', function() {
-                if(this.classList.contains('line-through')) return;
-
-                if(this.dataset.error === "true") {
-                    this.classList.add('bg-red-900', 'line-through', 'opacity-50');
-                    showNotif("ตรวจพบข้อมูลผิดปกติ กำจัดทิ้ง!", true);
-                    updateScore(10);
-                    state.s3Removed++;
-                    if(state.s3Removed >= 3) { // 3 error rows
-                        setTimeout(() => goToStage(4), 1500);
-                    }
-                }
-            });
-        });
-
-        // Stage 4 Logic (Match Method)
-        document.querySelectorAll('.btn-s4').forEach(btn => {
-            btn.addEventListener('click', function() {
-                if(this.dataset.locked === 'true') return;
-                const isCorrect = this.dataset.correct === "true";
-                if(isCorrect) {
-                    this.dataset.locked = 'true';
-                    this.classList.add('bg-green-500', 'border-green-400');
-                    showNotif("วิเคราะห์ได้ตรงจุด!", true);
-                    updateScore(20);
-                    setTimeout(() => goToStage(5), 1500);
-                } else {
-                    this.classList.add('bg-red-500');
-                    showNotif("วิธีนี้ไม่ตอบโจทย์ ลองคิดใหม่", false);
-                    updateScore(-5);
-                    setTimeout(() => this.classList.remove('bg-red-500'), 1000);
-                }
-            });
-        });
-
-        // Stage 5 Logic (Select Chart)
-        document.querySelectorAll('.btn-s5').forEach(btn => {
-            btn.addEventListener('click', function() {
-                if(this.dataset.locked === 'true') return;
-                const isCorrect = this.dataset.correct === "true";
-                if(isCorrect) {
-                    this.dataset.locked = 'true';
-                    this.classList.add('bg-green-500', 'scale-105');
-                    showNotif("กราฟแท่งเปรียบเทียบเหมาะสมที่สุด!", true);
-                    updateScore(20);
-                    setTimeout(() => goToStage(6), 2000);
-                } else {
-                    this.classList.add('bg-red-500');
-                    showNotif("กราฟนี้อาจทำให้เปรียบเทียบยาก", false);
-                    updateScore(-5);
-                    setTimeout(() => this.classList.remove('bg-red-500'), 1000);
-                }
-            });
-        });
-
-        // Keyboard accessibility for graph cards in Stage 5
-        document.querySelectorAll('.btn-s5[role="button"]').forEach(card => {
-            card.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    this.click();
-                }
-            });
-        });
-
-        // Final Stage Logic (Order)
-        document.querySelectorAll('.btn-final').forEach(btn => {
-            btn.addEventListener('click', function() {
-                if(this.classList.contains('hidden')) return;
-
-                const stepExpected = this.dataset.step;
-                
-                if(parseInt(stepExpected) === state.finalOrderIndex) {
-                    // Correct step
-                    const slot = document.getElementById(`slot-${state.finalOrderIndex}`);
-                    slot.innerHTML = this.innerHTML;
-                    slot.classList.replace('text-gray-400', 'text-green-400');
-                    slot.classList.replace('border-gray-400', 'border-green-400');
-                    slot.classList.replace('border-dashed', 'border-solid');
-                    
-                    this.classList.add('hidden');
-                    updateScore(10);
-                    showNotif("ถูกต้อง!", true);
-                    
-                    state.finalOrderIndex++;
-                    if(state.finalOrderIndex > 5) {
-                        updateScore(30); // Completion bonus
-                        setTimeout(() => goToStage(7), 2000);
-                    }
-                } else {
-                    showNotif("ลำดับยังไม่ถูกต้อง ลองนึกกระบวนการดีๆ", false);
-                    updateScore(-5);
-                }
-            });
-        });
-
-        // Summary Screen Logic
-        function showSummary() {
-            document.getElementById('final-score').innerText = state.score;
-            let rankText = "";
-            let rankClass = "";
-            
-            if(state.score >= 90) { rankText = "Data Scientist Master"; rankClass="bg-gradient-to-r from-yellow-400 to-orange-500 text-white"; }
-            else if(state.score >= 75) { rankText = "Data Analyst"; rankClass="bg-blue-500 text-white"; }
-            else if(state.score >= 60) { rankText = "Data Explorer"; rankClass="bg-green-500 text-white"; }
-            else { rankText = "Data Beginner"; rankClass="bg-gray-500 text-white"; }
-
-            const badge = document.getElementById('rank-badge');
-            badge.innerText = `ระดับ: ${rankText}`;
-            badge.className = `inline-block px-6 py-2 rounded-full text-2xl font-bold mt-2 shadow-lg ${rankClass}`;
+        if (game.orderExpected > 5) {
+          addScore(20);
+          setTimeout(nextStage, 900);
         }
+      } else {
+        addScore(-4);
+        target.classList.add('wrong-selected');
+        toast('ลำดับยังไม่ถูกต้อง ลองนึกขั้นตอนก่อน-หลังอีกครั้ง', 'bad');
+        setTimeout(() => target.classList.remove('wrong-selected'), 850);
+      }
+    }
 
-    </script>
+    function nextStage() {
+      game.stageIndex++;
+      if (game.stageIndex >= STAGES.length) {
+        finishGame();
+      } else {
+        renderStage();
+      }
+    }
+
+    function finishGame() {
+      game.completed = true;
+      showScreen('summary');
+      dom.finalScore.textContent = String(game.score);
+      let rank = 'Data Beginner';
+      let cls = 'inline-flex rounded-full px-5 py-2 font-black text-lg bg-slate-500/30 border border-slate-300/30 text-slate-100';
+      if (game.score >= 110) {
+        rank = 'Data Scientist Master';
+        cls = 'inline-flex rounded-full px-5 py-2 font-black text-lg bg-amber-400/20 border border-amber-200/40 text-amber-100';
+      } else if (game.score >= 90) {
+        rank = 'Data Analyst';
+        cls = 'inline-flex rounded-full px-5 py-2 font-black text-lg bg-sky-500/20 border border-sky-200/40 text-sky-100';
+      } else if (game.score >= 70) {
+        rank = 'Data Explorer';
+        cls = 'inline-flex rounded-full px-5 py-2 font-black text-lg bg-green-500/20 border border-green-200/40 text-green-100';
+      }
+      dom.rankBadge.textContent = `ระดับ: ${rank}`;
+      dom.rankBadge.className = cls;
+    }
+
+    function restart() {
+      game.stageIndex = 0;
+      game.score = 0;
+      game.completed = false;
+      dom.scoreText.textContent = '0';
+      showScreen('intro');
+      dom.topBar.classList.add('hidden');
+      dom.topBar.classList.remove('flex');
+      clearAim();
+    }
+
+    async function startAR() {
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        throw new Error('Camera requires HTTPS or localhost.');
+      }
+
+      setCameraStatus('กำลังเปิดกล้อง...', 'warn');
+      dom.arCursor.classList.add('visible');
+
+      if (game.ar.started) {
+        document.body.classList.add('camera-on');
+        setCameraStatus('AR พร้อม · เล็งค้างเพื่อเลือก', 'good');
+        return;
+      }
+
+      const video = dom.cameraVideo;
+      game.ar.hands = new Hands({
+        locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      game.ar.hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: isMobile ? 0 : 1,
+        minDetectionConfidence: isMobile ? 0.54 : 0.58,
+        minTrackingConfidence: isMobile ? 0.50 : 0.55
+      });
+      game.ar.hands.onResults(onHandResults);
+
+      game.ar.camera = new Camera(video, {
+        onFrame: async () => {
+          const now = performance.now();
+          if (game.ar.sending || now - game.ar.lastFrameAt < (1000 / CONFIG.maxFps)) return;
+          game.ar.lastFrameAt = now;
+          game.ar.sending = true;
+          try {
+            await game.ar.hands.send({ image: video });
+          } catch (error) {
+            console.warn('MediaPipe frame skipped:', error);
+          } finally {
+            game.ar.sending = false;
+          }
+        },
+        width: isMobile ? 640 : 640,
+        height: isMobile ? 480 : 480
+      });
+
+      await game.ar.camera.start();
+      game.ar.started = true;
+      document.body.classList.add('camera-on');
+      setCameraStatus('AR พร้อม · เล็งค้างเพื่อเลือก', 'good');
+      resizeCanvas();
+    }
+
+    function resizeCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dom.handCanvas.width = Math.round(window.innerWidth * dpr);
+      dom.handCanvas.height = Math.round(window.innerHeight * dpr);
+      dom.handCanvas.style.width = `${window.innerWidth}px`;
+      dom.handCanvas.style.height = `${window.innerHeight}px`;
+      const ctx = dom.handCanvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function landmarkToScreen(lm) {
+      const video = dom.cameraVideo;
+      const rect = video.getBoundingClientRect();
+      const videoWidth = video.videoWidth || 640;
+      const videoHeight = video.videoHeight || 480;
+      const videoAspect = videoWidth / videoHeight;
+      const screenAspect = rect.width / rect.height;
+
+      let drawW = rect.width;
+      let drawH = rect.height;
+      let offsetX = rect.left;
+      let offsetY = rect.top;
+
+      if (screenAspect > videoAspect) {
+        drawW = rect.width;
+        drawH = rect.width / videoAspect;
+        offsetY = rect.top + (rect.height - drawH) / 2;
+      } else {
+        drawH = rect.height;
+        drawW = rect.height * videoAspect;
+        offsetX = rect.left + (rect.width - drawW) / 2;
+      }
+
+      const x = offsetX + (1 - lm.x) * drawW;
+      const y = offsetY + lm.y * drawH;
+      return {
+        x: clamp(x, 0, window.innerWidth - 1),
+        y: clamp(y, 0, window.innerHeight - 1)
+      };
+    }
+
+    function weightedPointer(landmarks) {
+      const p8 = landmarks[8];
+      const p7 = landmarks[7];
+      const p6 = landmarks[6];
+      return {
+        x: p8.x * 0.58 + p7.x * 0.30 + p6.x * 0.12,
+        y: p8.y * 0.58 + p7.y * 0.30 + p6.y * 0.12,
+        z: (p8.z || 0) * 0.58 + (p7.z || 0) * 0.30 + (p6.z || 0) * 0.12
+      };
+    }
+
+    function smoothPointer(rawX, rawY) {
+      const ar = game.ar;
+      if (ar.x === null || ar.y === null) {
+        ar.x = rawX;
+        ar.y = rawY;
+        return { x: rawX, y: rawY };
+      }
+      const dx = rawX - ar.x;
+      const dy = rawY - ar.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 1.1) return { x: ar.x, y: ar.y };
+
+      const speedAlpha = clamp(CONFIG.smoothingSlow + distance / 190, CONFIG.smoothingSlow, game.ar.pinch ? 0.52 : CONFIG.smoothingFast);
+      ar.x += dx * speedAlpha;
+      ar.y += dy * speedAlpha;
+      return { x: ar.x, y: ar.y };
+    }
+
+    function readPinch(landmarks) {
+      const ar = game.ar;
+      const thumb = landmarks[4];
+      const index = landmarks[8];
+      const indexMcp = landmarks[5];
+      const pinkyMcp = landmarks[17];
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palm = Math.max(dist2(indexMcp, pinkyMcp), dist2(wrist, middleMcp), 0.07);
+      const ratio2 = dist2(thumb, index) / palm;
+      const ratio3 = dist3(thumb, index) / palm;
+      const ratio = ratio2 * 0.74 + ratio3 * 0.26;
+      const candidate = ar.pinch ? ratio < CONFIG.pinchRelease : ratio < CONFIG.pinchStart;
+
+      if (candidate === ar.pinchCandidate) {
+        ar.pinchFrames++;
+      } else {
+        ar.pinchCandidate = candidate;
+        ar.pinchFrames = 1;
+      }
+      return ar.pinchFrames >= CONFIG.pinchStableFrames ? ar.pinchCandidate : ar.pinch;
+    }
+
+    function onHandResults(results) {
+      const ar = game.ar;
+      const ctx = dom.handCanvas.getContext('2d');
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      const now = performance.now();
+      if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
+        ar.missingFrames++;
+        if (ar.missingFrames > CONFIG.missingFrameTolerance) {
+          dom.arCursor.classList.add('lost');
+          clearAim();
+          ar.pinch = false;
+          dom.arCursor.classList.remove('pinching');
+          if (now - ar.lastResultAt > 850) {
+            setCameraStatus('กำลังค้นหามือ...', 'warn');
+            ar.lastResultAt = now;
+          }
+        }
+        return;
+      }
+
+      ar.missingFrames = 0;
+      ar.lastResultAt = now;
+      dom.arCursor.classList.remove('lost');
+
+      const landmarks = results.multiHandLandmarks[0];
+      drawHandGuide(ctx, landmarks);
+
+      const pointerLm = weightedPointer(landmarks);
+      const screenPoint = landmarkToScreen(pointerLm);
+      ar.rawX = screenPoint.x;
+      ar.rawY = screenPoint.y;
+      const smooth = smoothPointer(screenPoint.x, screenPoint.y);
+
+      dom.arCursor.style.left = `${smooth.x}px`;
+      dom.arCursor.style.top = `${smooth.y}px`;
+
+      const target = getARTargetAt(smooth.x, smooth.y);
+      updateAim(target, now);
+
+      const pinchNow = readPinch(landmarks);
+      if (pinchNow && !ar.pinch) {
+        ar.pinchStartTarget = target;
+        ar.pinchStartAt = now;
+        ar.pinchStartX = smooth.x;
+        ar.pinchStartY = smooth.y;
+        dom.arCursor.classList.add('pinching');
+      } else if (!pinchNow && ar.pinch) {
+        dom.arCursor.classList.remove('pinching');
+        const moved = Math.hypot(smooth.x - ar.pinchStartX, smooth.y - ar.pinchStartY);
+        const heldMs = now - ar.pinchStartAt;
+        const releaseTarget = target || ar.pinchStartTarget;
+        if (releaseTarget && moved < 110 && heldMs > 70) {
+          activateTarget(releaseTarget, 'ar');
+        }
+        ar.pinchStartTarget = null;
+      }
+      ar.pinch = pinchNow;
+
+      if (game.mode === 'ar') {
+        const status = target ? 'AR พร้อม · กำลังเล็งเป้าหมาย' : 'AR พร้อม · เล็งคำตอบ';
+        setCameraStatus(status, 'good');
+      }
+    }
+
+    function drawHandGuide(ctx, landmarks) {
+      const points = landmarks.map(landmarkToScreen);
+      ctx.save();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.38)';
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.80)';
+      const links = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+      ctx.beginPath();
+      links.forEach(([a,b]) => {
+        ctx.moveTo(points[a].x, points[a].y);
+        ctx.lineTo(points[b].x, points[b].y);
+      });
+      ctx.stroke();
+      points.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, i === 8 ? 6 : 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    function getARTargetAt(x, y) {
+      const oldVisibility = dom.arCursor.style.visibility;
+      dom.arCursor.style.visibility = 'hidden';
+      const direct = document.elementFromPoint(x, y);
+      dom.arCursor.style.visibility = oldVisibility;
+
+      const directTarget = direct ? direct.closest('.game-target:not(.disabled)') : null;
+      if (directTarget && isVisible(directTarget)) return directTarget;
+
+      let best = null;
+      let bestScore = Infinity;
+      const targets = $$('.game-target:not(.disabled)').filter(isVisible);
+      for (const target of targets) {
+        const r = target.getBoundingClientRect();
+        const pad = CONFIG.arHitPadding;
+        if (x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad) {
+          const cx = clamp(x, r.left, r.right);
+          const cy = clamp(y, r.top, r.bottom);
+          const score = Math.hypot(x - cx, y - cy);
+          if (score < bestScore) {
+            bestScore = score;
+            best = target;
+          }
+        }
+      }
+      return best;
+    }
+
+    function updateAim(target, now) {
+      const ar = game.ar;
+      if (target !== ar.target) {
+        if (ar.target) ar.target.classList.remove('aimed');
+        ar.target = target;
+        ar.targetSince = now;
+        if (target) target.classList.add('aimed');
+      }
+
+      if (!target || ar.pinch || game.mode !== 'ar') {
+        dom.arCursor.style.setProperty('--dwell', '0deg');
+        return;
+      }
+
+      const progress = clamp((now - ar.targetSince) / CONFIG.dwellMs, 0, 1);
+      dom.arCursor.style.setProperty('--dwell', `${progress * 360}deg`);
+      if (progress >= 1 && now - ar.lastActivationAt >= CONFIG.arActivationCooldownMs) {
+        activateTarget(target, 'ar');
+        ar.targetSince = now + 9999;
+      }
+    }
+
+    function clearAim() {
+      if (game.ar.target) game.ar.target.classList.remove('aimed');
+      game.ar.target = null;
+      game.ar.targetSince = 0;
+      dom.arCursor.style.setProperty('--dwell', '0deg');
+    }
+
+    function isVisible(el) {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom >= 0 && r.right >= 0 && r.top <= window.innerHeight && r.left <= window.innerWidth;
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeAttr(text) {
+      return escapeHtml(text).replace(/`/g, '&#096;');
+    }
+
+    dom.stageContent.addEventListener('click', event => {
+      const target = event.target.closest('.game-target');
+      if (!target) return;
+      activateTarget(target, 'mouse');
+    });
+
+    dom.stageContent.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target.closest('.game-target');
+      if (!target) return;
+      event.preventDefault();
+      activateTarget(target, 'keyboard');
+    });
+
+    $('#startAR').addEventListener('click', () => startGame('ar'));
+    $('#startMouse').addEventListener('click', () => startGame('mouse'));
+    $('#restartBtn').addEventListener('click', restart);
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 250));
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) clearAim();
+    });
+  </script>
 </body>
 </html>

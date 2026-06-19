@@ -120,6 +120,17 @@
             z-index: 50;
         }
 
+        .ar-targeted {
+            outline: 3px solid rgba(250, 204, 21, 0.95);
+            outline-offset: 4px;
+            box-shadow: 0 0 22px rgba(250, 204, 21, 0.65), inset 0 0 12px rgba(250, 204, 21, 0.18);
+        }
+
+        .ar-hand-lost {
+            opacity: 0.45;
+            transform: translate(-50%, -50%) scale(0.85);
+        }
+
         .floating {
             animation: float 3s ease-in-out infinite;
         }
@@ -453,11 +464,21 @@
             pinchStableFrames: 0,
             pointerX: null,
             pointerY: null,
+            pointerVX: 0,
+            pointerVY: 0,
+            lastPointerAt: 0,
             missingHandFrames: 0,
+            visibleHandFrames: 0,
+            stableHandLabel: null,
             draggedElement: null,
             dragOffsetX: 0,
             dragOffsetY: 0,
-            activePointerId: null
+            activePointerId: null,
+            pendingClickTarget: null,
+            pendingClickStartX: 0,
+            pendingClickStartY: 0,
+            pendingClickStartedAt: 0,
+            lastSyntheticClickAt: 0
         };
 
         const stageInfo = [
@@ -565,7 +586,10 @@
         let hands, camera;
         const arRuntime = {
             processingFrame: false,
-            lastStatusAt: 0
+            lastStatusAt: 0,
+            lastFrameSentAt: 0,
+            targetFrameInterval: 33, // ~30 FPS: เร็วพอสำหรับเกม และไม่หนักจน MediaPipe สะสมคิว
+            lastLandmarkAt: 0
         };
 
         async function initMediaPipe() {
@@ -577,19 +601,25 @@
                 }});
 
                 const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+                const prefersLowPower = isMobile || navigator.hardwareConcurrency <= 4;
+
                 hands.setOptions({
                     maxNumHands: 1,
-                    modelComplexity: isMobile ? 0 : 1,
-                    minDetectionConfidence: 0.72,
-                    minTrackingConfidence: 0.72
+                    modelComplexity: prefersLowPower ? 0 : 1,
+                    minDetectionConfidence: prefersLowPower ? 0.58 : 0.64,
+                    minTrackingConfidence: prefersLowPower ? 0.62 : 0.68
                 });
 
                 hands.onResults(onARResults);
 
                 camera = new Camera(videoElement, {
                     onFrame: async () => {
-                        if (arRuntime.processingFrame) return;
+                        const now = performance.now();
+                        if (arRuntime.processingFrame || now - arRuntime.lastFrameSentAt < arRuntime.targetFrameInterval) return;
+                        if (videoElement.readyState < 2) return;
+
                         arRuntime.processingFrame = true;
+                        arRuntime.lastFrameSentAt = now;
                         try {
                             await hands.send({ image: videoElement });
                         } catch (error) {
@@ -598,8 +628,9 @@
                             arRuntime.processingFrame = false;
                         }
                     },
-                    width: isMobile ? 640 : 960,
-                    height: isMobile ? 480 : 540
+                    // 640x480 ให้ latency ต่ำกว่า 960x540 และช่วยให้มือถือ/โน้ตบุ๊กเก่าตรวจจับต่อเนื่องขึ้น
+                    width: 640,
+                    height: 480
                 });
 
                 await camera.start();
@@ -612,6 +643,18 @@
 
         function distance2D(a, b) {
             return Math.hypot(a.x - b.x, a.y - b.y);
+        }
+
+        function distance3D(a, b) {
+            return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+        }
+
+        function lerpLandmark(a, b, weightA = 0.72) {
+            return {
+                x: (a.x * weightA) + (b.x * (1 - weightA)),
+                y: (a.y * weightA) + (b.y * (1 - weightA)),
+                z: ((a.z || 0) * weightA) + ((b.z || 0) * (1 - weightA))
+            };
         }
 
         function clamp(value, min, max) {
@@ -651,25 +694,63 @@
         }
 
         function smoothPointer(rawX, rawY) {
-            const alpha = state.draggedElement ? 0.46 : 0.34;
-            state.pointerX = state.pointerX === null ? rawX : state.pointerX + (rawX - state.pointerX) * alpha;
-            state.pointerY = state.pointerY === null ? rawY : state.pointerY + (rawY - state.pointerY) * alpha;
+            const now = performance.now();
+            const dt = state.lastPointerAt ? Math.max(16, now - state.lastPointerAt) : 33;
+            state.lastPointerAt = now;
+
+            if (state.pointerX === null || state.pointerY === null) {
+                state.pointerX = rawX;
+                state.pointerY = rawY;
+                state.pointerVX = 0;
+                state.pointerVY = 0;
+                return { x: state.pointerX, y: state.pointerY };
+            }
+
+            const dx = rawX - state.pointerX;
+            const dy = rawY - state.pointerY;
+            const dist = Math.hypot(dx, dy);
+
+            // Dead zone ลดอาการ cursor สั่นเมื่อมือหยุดนิ่ง แต่ยังคงความไวเมื่อผู้เล่นลากวัตถุ
+            if (!state.draggedElement && dist < 1.75) {
+                return { x: state.pointerX, y: state.pointerY };
+            }
+
+            // Dynamic smoothing: เคลื่อนที่ไกลให้ตามไว เคลื่อนที่น้อยให้กรองสั่นมากขึ้น
+            const speed = dist / dt;
+            const baseAlpha = state.draggedElement ? 0.62 : 0.26;
+            const speedBoost = clamp(speed * 5.2, 0, state.draggedElement ? 0.22 : 0.34);
+            const alpha = clamp(baseAlpha + speedBoost, 0.22, state.draggedElement ? 0.78 : 0.58);
+
+            const nextX = state.pointerX + dx * alpha;
+            const nextY = state.pointerY + dy * alpha;
+            state.pointerVX = (nextX - state.pointerX) / dt;
+            state.pointerVY = (nextY - state.pointerY) / dt;
+            state.pointerX = nextX;
+            state.pointerY = nextY;
             return { x: state.pointerX, y: state.pointerY };
         }
 
         function readPinchState(landmarks) {
             const thumbTip = landmarks[4];
             const indexTip = landmarks[8];
+            const thumbIp = landmarks[3];
+            const indexDip = landmarks[7];
             const indexMcp = landmarks[5];
             const pinkyMcp = landmarks[17];
             const wrist = landmarks[0];
             const middleMcp = landmarks[9];
 
-            const palmWidth = Math.max(distance2D(indexMcp, pinkyMcp), distance2D(wrist, middleMcp), 0.06);
-            const pinchRatio = distance2D(thumbTip, indexTip) / palmWidth;
+            const palmWidth2D = Math.max(distance2D(indexMcp, pinkyMcp), distance2D(wrist, middleMcp), 0.065);
+            const palmWidth3D = Math.max(distance3D(indexMcp, pinkyMcp), distance3D(wrist, middleMcp), 0.065);
+            const pinchRatio2D = distance2D(thumbTip, indexTip) / palmWidth2D;
+            const pinchRatio3D = distance3D(thumbTip, indexTip) / palmWidth3D;
+            const fingerFoldRatio = distance2D(thumbIp, indexDip) / palmWidth2D;
 
-            // Hysteresis: start pinch at a smaller ratio, release only when clearly open.
-            const nextCandidate = state.isPinching ? pinchRatio < 0.64 : pinchRatio < 0.44;
+            // ใช้ทั้ง 2D/3D และจุดข้อกลางนิ้ว เพื่อกัน false positive เวลานิ้วซ้อนกันจากมุมกล้อง
+            const closeEnough = pinchRatio2D < 0.40 && pinchRatio3D < 0.52 && fingerFoldRatio < 0.56;
+            const stillClose = pinchRatio2D < 0.58 && pinchRatio3D < 0.72 && fingerFoldRatio < 0.76;
+            const nextCandidate = state.isPinching ? stillClose : closeEnough;
+
             if (nextCandidate === state.pinchCandidate) {
                 state.pinchStableFrames++;
             } else {
@@ -677,25 +758,51 @@
                 state.pinchStableFrames = 1;
             }
 
+            // เริ่มจีบต้องนิ่ง 2 เฟรม, ปล่อยนิ้วต้องชัด 2 เฟรม จึงไม่กระพริบระหว่างลาก
             return state.pinchStableFrames >= 2 ? state.pinchCandidate : state.isPinching;
         }
 
         function resetARGesture() {
-            if (state.isPinching && state.draggedElement && state.pointerX !== null && state.pointerY !== null) {
+            if (state.isPinching && state.pointerX !== null && state.pointerY !== null) {
                 handleInteraction(state.pointerX, state.pointerY, 'end');
             }
+            clearPendingClickHighlight();
             state.isPinching = false;
             state.pinchCandidate = false;
             state.pinchStableFrames = 0;
             uiCursor.classList.remove('pinching');
         }
 
+        function selectPrimaryHand(results) {
+            const landmarksList = results.multiHandLandmarks || [];
+            if (!landmarksList.length) return null;
+
+            // กรณีตั้ง maxNumHands เป็น 1 จะคืนมือเดียวอยู่แล้ว แต่ฟังก์ชันนี้ทำให้รองรับการแก้เป็น 2 มือในอนาคต
+            let bestIndex = 0;
+            let bestScore = -Infinity;
+            for (let i = 0; i < landmarksList.length; i++) {
+                const hand = landmarksList[i];
+                const indexTip = hand[8];
+                const wrist = hand[0];
+                const palmSize = distance2D(hand[5], hand[17]);
+                const insideScore = (indexTip.x > 0.02 && indexTip.x < 0.98 && indexTip.y > 0.02 && indexTip.y < 0.98) ? 1 : 0;
+                const score = insideScore + palmSize - Math.abs(wrist.z || 0) * 0.05;
+                if (score > bestScore) {
+                    bestIndex = i;
+                    bestScore = score;
+                }
+            }
+            return landmarksList[bestIndex];
+        }
+
         function onARResults(results) {
-            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+            const landmarks = selectPrimaryHand(results);
+            if (!landmarks) {
                 state.missingHandFrames++;
+                uiCursor.classList.add('ar-hand-lost');
                 if (state.missingHandFrames > 5) {
                     resetARGesture();
-                    if (Date.now() - arRuntime.lastStatusAt > 1000) {
+                    if (Date.now() - arRuntime.lastStatusAt > 900) {
                         setCameraStatus('searching', 'ไม่พบมือ / วางมือให้อยู่ในกรอบกล้อง');
                         arRuntime.lastStatusAt = Date.now();
                     }
@@ -703,14 +810,18 @@
                 return;
             }
 
+            arRuntime.lastLandmarkAt = performance.now();
+            state.visibleHandFrames++;
             state.missingHandFrames = 0;
+            uiCursor.classList.remove('ar-hand-lost');
             if (Date.now() - arRuntime.lastStatusAt > 1000) {
                 setCameraStatus('ready', 'AR พร้อมใช้งาน');
                 arRuntime.lastStatusAt = Date.now();
             }
 
-            const landmarks = results.multiHandLandmarks[0];
-            const indexScreen = landmarkToScreen(landmarks[8]);
+            // ใช้จุดผสมระหว่างปลายนิ้วชี้กับข้อ DIP เพื่อลดการสั่นของ landmark 8 แต่ยังชี้ตำแหน่งได้ตรง
+            const stableIndexPointer = lerpLandmark(landmarks[8], landmarks[7], 0.76);
+            const indexScreen = landmarkToScreen(stableIndexPointer);
             const pointer = smoothPointer(indexScreen.x, indexScreen.y);
 
             uiCursor.style.left = `${pointer.x}px`;
@@ -734,9 +845,7 @@
         // --- Interaction Engine (Unified for AR, Mouse, Touch, Stylus) ---
         const CLICKABLE_SELECTOR = 'button, .btn-s2, .btn-s4, .btn-s5, .btn-final, .row-s3, [role="button"]';
 
-        function elementAtPointSafe(x, y, options = {}) {
-            const safeX = clamp(x, 0, window.innerWidth - 1);
-            const safeY = clamp(y, 0, window.innerHeight - 1);
+        function withHiddenCursorAndDragged(callback, options = {}) {
             const oldCursorVisibility = uiCursor.style.visibility;
             const oldDraggedPointerEvents = state.draggedElement ? state.draggedElement.style.pointerEvents : null;
 
@@ -745,16 +854,68 @@
                 state.draggedElement.style.pointerEvents = 'none';
             }
 
-            const element = document.elementFromPoint(safeX, safeY);
+            const result = callback();
 
             if (options.ignoreDragged && state.draggedElement) {
                 state.draggedElement.style.pointerEvents = oldDraggedPointerEvents || 'auto';
             }
             uiCursor.style.visibility = oldCursorVisibility;
-            return element;
+            return result;
+        }
+
+        function sampleOffsets(radius = 0) {
+            if (!radius) return [[0, 0]];
+            return [
+                [0, 0], [-radius, 0], [radius, 0], [0, -radius], [0, radius],
+                [-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius]
+            ];
+        }
+
+        function elementAtPointSafe(x, y, options = {}) {
+            const radius = options.sampleRadius || 0;
+            const selector = options.selector || null;
+
+            return withHiddenCursorAndDragged(() => {
+                let firstElement = null;
+                for (const [dx, dy] of sampleOffsets(radius)) {
+                    const safeX = clamp(x + dx, 0, window.innerWidth - 1);
+                    const safeY = clamp(y + dy, 0, window.innerHeight - 1);
+                    const element = document.elementFromPoint(safeX, safeY);
+                    if (!firstElement) firstElement = element;
+                    if (!selector || (element && element.closest(selector))) {
+                        return element;
+                    }
+                }
+                return firstElement;
+            }, options);
+        }
+
+        function clearPendingClickHighlight() {
+            if (state.pendingClickTarget) {
+                state.pendingClickTarget.classList.remove('ar-targeted');
+            }
+            state.pendingClickTarget = null;
+            state.pendingClickStartedAt = 0;
+        }
+
+        function setPendingClickTarget(target, x, y) {
+            clearPendingClickHighlight();
+            state.pendingClickTarget = target;
+            state.pendingClickStartX = x;
+            state.pendingClickStartY = y;
+            state.pendingClickStartedAt = performance.now();
+            target.classList.add('ar-targeted');
+        }
+
+        function fireSyntheticClick(target) {
+            const now = performance.now();
+            if (!target || now - state.lastSyntheticClickAt < 180) return;
+            state.lastSyntheticClickAt = now;
+            target.click();
         }
 
         function startDrag(element, x, y) {
+            clearPendingClickHighlight();
             state.draggedElement = element;
             const rect = element.getBoundingClientRect();
 
@@ -785,29 +946,50 @@
         }
 
         function handleInteraction(x, y, action) {
+            const forgivingRadius = state.mode === 'ar' ? 30 : 0;
+
             if (action === 'move') {
                 moveDrag(x, y);
+                if (!state.draggedElement && state.pendingClickTarget) {
+                    const targetProbe = elementAtPointSafe(x, y, { sampleRadius: forgivingRadius, selector: CLICKABLE_SELECTOR });
+                    const currentClickable = targetProbe ? targetProbe.closest(CLICKABLE_SELECTOR) : null;
+                    if (currentClickable && currentClickable !== state.pendingClickTarget) {
+                        setPendingClickTarget(currentClickable, x, y);
+                    }
+                }
                 return;
             }
 
             if (action === 'end') {
-                if (!state.draggedElement) return;
-                const dragged = state.draggedElement;
-                dragged.classList.remove('is-dragged');
+                if (state.draggedElement) {
+                    const dragged = state.draggedElement;
+                    dragged.classList.remove('is-dragged');
 
-                const dropTarget = elementAtPointSafe(x, y, { ignoreDragged: true });
-                const dropzone = dropTarget ? dropTarget.closest('#dropzone-s1') : null;
+                    const dropTarget = elementAtPointSafe(x, y, { ignoreDragged: true, sampleRadius: state.mode === 'ar' ? 36 : 0, selector: '#dropzone-s1' });
+                    const dropzone = dropTarget ? dropTarget.closest('#dropzone-s1') : null;
 
-                if (dropzone) {
-                    evaluateStage1Drop(dragged);
-                } else {
-                    resetDraggedElement(dragged);
+                    if (dropzone) {
+                        evaluateStage1Drop(dragged);
+                    } else {
+                        resetDraggedElement(dragged);
+                    }
+                    state.draggedElement = null;
+                    return;
                 }
-                state.draggedElement = null;
+
+                if (state.pendingClickTarget) {
+                    const targetProbe = elementAtPointSafe(x, y, { sampleRadius: forgivingRadius, selector: CLICKABLE_SELECTOR });
+                    const releaseClickable = targetProbe ? targetProbe.closest(CLICKABLE_SELECTOR) : null;
+                    const moveDistance = Math.hypot(x - state.pendingClickStartX, y - state.pendingClickStartY);
+                    const targetToClick = releaseClickable || (moveDistance < 95 ? state.pendingClickTarget : null);
+                    const highlighted = state.pendingClickTarget;
+                    clearPendingClickHighlight();
+                    if (targetToClick) fireSyntheticClick(targetToClick || highlighted);
+                }
                 return;
             }
 
-            const elUnderCursor = elementAtPointSafe(x, y);
+            const elUnderCursor = elementAtPointSafe(x, y, { sampleRadius: forgivingRadius, selector: `.draggable, ${CLICKABLE_SELECTOR}` });
             if (!elUnderCursor) return;
 
             // Drag cards must be detected before generic clickable elements.
@@ -819,7 +1001,7 @@
 
             const clickable = elUnderCursor.closest(CLICKABLE_SELECTOR);
             if (clickable) {
-                clickable.click();
+                setPendingClickTarget(clickable, x, y);
             }
         }
 

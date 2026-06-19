@@ -54,10 +54,23 @@
 
     .camera-layer {
       position: fixed;
-      inset: 0;
-      z-index: -5;
+      right: max(0.9rem, env(safe-area-inset-right, 0px));
+      bottom: max(0.9rem, calc(env(safe-area-inset-bottom, 0px) + 0.9rem));
+      width: min(24vw, 300px);
+      aspect-ratio: 4 / 3;
+      z-index: 60;
       overflow: hidden;
-      background: #020617;
+      border-radius: 1.35rem;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: none;
+    }
+
+    body.camera-on .camera-layer {
+      display: block;
     }
 
     .camera-layer::after {
@@ -65,9 +78,47 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background:
-        radial-gradient(circle at center, rgba(15, 23, 42, 0.10), rgba(2, 6, 23, 0.52)),
-        linear-gradient(to bottom, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0.62));
+      background: linear-gradient(to top, rgba(2, 6, 23, 0.48), rgba(2, 6, 23, 0.04) 40%, rgba(2, 6, 23, 0.24));
+      z-index: 2;
+    }
+
+    .camera-live-badge {
+      position: absolute;
+      top: 0.7rem;
+      left: 0.7rem;
+      z-index: 3;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.38rem 0.72rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      color: white;
+      background: rgba(239, 68, 68, 0.88);
+      box-shadow: 0 10px 24px rgba(239, 68, 68, 0.3);
+    }
+
+    .camera-live-badge::before {
+      content: "";
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 999px;
+      background: white;
+      box-shadow: 0 0 10px rgba(255,255,255,0.7);
+    }
+
+    .camera-live-caption {
+      position: absolute;
+      left: 0.75rem;
+      right: 0.75rem;
+      bottom: 0.72rem;
+      z-index: 3;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.55);
     }
 
     #cameraVideo {
@@ -77,21 +128,21 @@
       transform: scaleX(-1);
       opacity: 0;
       transition: opacity 450ms ease;
-      filter: saturate(1.05) contrast(1.08) brightness(0.88);
+      filter: saturate(1.05) contrast(1.08) brightness(0.95);
     }
 
     body.camera-on #cameraVideo {
-      opacity: 0.82;
+      opacity: 1;
     }
 
     #handCanvas {
-      position: fixed;
+      position: absolute;
       inset: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: -4;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
       pointer-events: none;
-      opacity: 0.88;
+      opacity: 0.95;
     }
 
     .glass {
@@ -241,6 +292,10 @@
       .choice-grid { grid-template-columns: 1fr; }
       .stage-shell { max-height: calc(100vh - 10.5rem); overflow-y: auto; }
       #topBar { gap: .65rem; }
+      .camera-layer {
+        width: min(42vw, 190px);
+        border-radius: 1rem;
+      }
     }
 
     .stage-shell::-webkit-scrollbar { width: 9px; }
@@ -276,8 +331,10 @@
 <body>
   <div class="camera-layer" aria-hidden="true">
     <video id="cameraVideo" playsinline autoplay muted></video>
+    <canvas id="handCanvas" aria-hidden="true"></canvas>
+    <div class="camera-live-badge">LIVE</div>
+    <div class="camera-live-caption">กรอบภาพผู้เล่นจากกล้อง</div>
   </div>
-  <canvas id="handCanvas" aria-hidden="true"></canvas>
   <div id="arCursor" aria-hidden="true"><div class="dot"></div></div>
 
   <div id="toast" class="fixed top-4 left-1/2 z-[9998] opacity-0 pointer-events-none transition-all duration-200 -translate-x-1/2 -translate-y-3 scale-95">
@@ -318,7 +375,7 @@
           </h1>
           <h2 class="mt-2 text-2xl md:text-4xl font-extrabold">ภารกิจนักวิทยาการข้อมูล</h2>
           <p class="mx-auto mt-5 max-w-3xl text-slate-200 text-base md:text-xl leading-relaxed">
-            เรียนรู้กระบวนการวิทยาการข้อมูล 5 ขั้นตอนผ่านเกมตอบคำถามแบบ AR โดยใช้ภาพจากกล้องของผู้เล่นเป็นฉากหลังจริง และใช้มือควบคุมผ่านกล้อง หรือเล่นด้วยเมาส์/สัมผัสได้ทันที
+            เรียนรู้กระบวนการวิทยาการข้อมูล 5 ขั้นตอนผ่านเกมตอบคำถามแบบ AR โดยใช้กรอบภาพผู้เล่นแบบ Live ที่มุมจอ และใช้มือควบคุมผ่านกล้อง หรือเล่นด้วยเมาส์/สัมผัสได้ทันที
           </p>
 
           <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3 text-left">
@@ -341,7 +398,7 @@
 
           <div class="mt-7 flex flex-col md:flex-row justify-center gap-4">
             <button id="startAR" class="rounded-2xl bg-sky-500 hover:bg-sky-400 active:scale-[.98] px-7 py-4 text-xl font-black shadow-2xl shadow-sky-500/25 border border-sky-200/40 transition">
-              📹 เริ่มเกมด้วยกล้อง AR + ฉากหลังกล้อง
+              📹 เริ่มเกมด้วยกล้อง AR + กรอบ Live มุมจอ
             </button>
             <button id="startMouse" class="rounded-2xl bg-slate-700 hover:bg-slate-600 active:scale-[.98] px-7 py-4 text-xl font-black shadow-xl border border-slate-400/25 transition">
               🖱️ เล่นด้วยเมาส์/สัมผัส
@@ -624,6 +681,7 @@
           toast('เปิดกล้องไม่ได้ ระบบเปลี่ยนเป็นเมาส์/สัมผัส', 'bad');
         });
       } else {
+        document.body.classList.remove('camera-on');
         setCameraStatus('โหมดเมาส์/สัมผัส', 'neutral');
         dom.arCursor.classList.remove('visible');
       }
@@ -881,6 +939,7 @@
       showScreen('intro');
       dom.topBar.classList.add('hidden');
       dom.topBar.classList.remove('flex');
+      document.body.classList.remove('camera-on');
       clearAim();
     }
 
@@ -894,7 +953,7 @@
 
       if (game.ar.started) {
         document.body.classList.add('camera-on');
-        setCameraStatus('AR พร้อม · ฉากหลังเป็นกล้องผู้เล่น', 'good');
+        setCameraStatus('AR พร้อม · แสดงกรอบ Live ของผู้เล่น', 'good');
         return;
       }
 
@@ -933,48 +992,34 @@
       await game.ar.camera.start();
       game.ar.started = true;
       document.body.classList.add('camera-on');
-      setCameraStatus('AR พร้อม · ฉากหลังเป็นกล้องผู้เล่น', 'good');
+      setCameraStatus('AR พร้อม · แสดงกรอบ Live ของผู้เล่น', 'good');
       resizeCanvas();
     }
 
     function resizeCanvas() {
+      const frameRect = document.querySelector('.camera-layer').getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      dom.handCanvas.width = Math.round(window.innerWidth * dpr);
-      dom.handCanvas.height = Math.round(window.innerHeight * dpr);
-      dom.handCanvas.style.width = `${window.innerWidth}px`;
-      dom.handCanvas.style.height = `${window.innerHeight}px`;
+      const width = Math.max(1, Math.round(frameRect.width || 320));
+      const height = Math.max(1, Math.round(frameRect.height || 240));
+      dom.handCanvas.width = Math.round(width * dpr);
+      dom.handCanvas.height = Math.round(height * dpr);
+      dom.handCanvas.style.width = `${width}px`;
+      dom.handCanvas.style.height = `${height}px`;
       const ctx = dom.handCanvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     function landmarkToScreen(lm) {
-      const video = dom.cameraVideo;
-      const rect = video.getBoundingClientRect();
-      const videoWidth = video.videoWidth || 640;
-      const videoHeight = video.videoHeight || 480;
-      const videoAspect = videoWidth / videoHeight;
-      const screenAspect = rect.width / rect.height;
-
-      let drawW = rect.width;
-      let drawH = rect.height;
-      let offsetX = rect.left;
-      let offsetY = rect.top;
-
-      if (screenAspect > videoAspect) {
-        drawW = rect.width;
-        drawH = rect.width / videoAspect;
-        offsetY = rect.top + (rect.height - drawH) / 2;
-      } else {
-        drawH = rect.height;
-        drawW = rect.height * videoAspect;
-        offsetX = rect.left + (rect.width - drawW) / 2;
-      }
-
-      const x = offsetX + (1 - lm.x) * drawW;
-      const y = offsetY + lm.y * drawH;
       return {
-        x: clamp(x, 0, window.innerWidth - 1),
-        y: clamp(y, 0, window.innerHeight - 1)
+        x: clamp((1 - lm.x) * window.innerWidth, 0, window.innerWidth - 1),
+        y: clamp(lm.y * window.innerHeight, 0, window.innerHeight - 1)
+      };
+    }
+
+    function landmarkToPreview(lm) {
+      return {
+        x: clamp((1 - lm.x) * dom.handCanvas.clientWidth, 0, Math.max(0, dom.handCanvas.clientWidth - 1)),
+        y: clamp(lm.y * dom.handCanvas.clientHeight, 0, Math.max(0, dom.handCanvas.clientHeight - 1))
       };
     }
 
@@ -1090,13 +1135,13 @@
       ar.pinch = pinchNow;
 
       if (game.mode === 'ar') {
-        const status = target ? 'AR พร้อม · ฉากหลังกล้อง · กำลังเล็ง' : 'AR พร้อม · ฉากหลังกล้อง · เล็งคำตอบ';
+        const status = target ? 'AR พร้อม · กรอบ Live · กำลังเล็ง' : 'AR พร้อม · กรอบ Live · เล็งคำตอบ';
         setCameraStatus(status, 'good');
       }
     }
 
     function drawHandGuide(ctx, landmarks) {
-      const points = landmarks.map(landmarkToScreen);
+      const points = landmarks.map(landmarkToPreview);
       ctx.save();
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.38)';

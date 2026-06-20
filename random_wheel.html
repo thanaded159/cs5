@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โปรแกรมสุ่มหรรษา - นำโชค</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700;800;900&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        :root {
+            font-family: 'Kanit', sans-serif;
+        }
+
+        /* ธีมและพื้นหลัง */
+        body {
+            background-color: #2b1055;
+            overflow: hidden; /* ป้องกัน Scrollbar จาก Sunburst */
+        }
+
+        .sunburst-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 200vw;
+            height: 200vw;
+            transform: translate(-50%, -50%);
+            z-index: -2;
+            background: repeating-conic-gradient(
+                from 0deg,
+                #ffde59 0deg 15deg,
+                #ff914d 15deg 30deg
+            );
+            animation: spin-bg 30s linear infinite;
+        }
+
+        .dim-layer {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .dim-layer.active { opacity: 1; }
+
+        @keyframes spin-bg {
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* กระดานดำ */
+        .chalkboard {
+            background-color: #1a3c20;
+            background-image: radial-gradient(circle, #2a5231 0%, #0d2111 100%);
+            border: 24px solid #5c3a21;
+            border-radius: 16px;
+            box-shadow: 
+                inset 0 0 30px rgba(0,0,0,0.8),
+                0 20px 40px rgba(0,0,0,0.5),
+                0 0 0 4px #3d2311;
+            position: relative;
+        }
+
+        /* เอฟเฟกต์ Slot Machine */
+        .slot-rolling {
+            animation: slot-blur 0.05s infinite alternate;
+            color: #fceea7;
+            text-shadow: 0 0 10px rgba(252, 238, 167, 0.8);
+        }
+
+        @keyframes slot-blur {
+            0% { transform: translateY(-8px); filter: blur(2px); }
+            100% { transform: translateY(8px); filter: blur(3px); }
+        }
+
+        /* เอฟเฟกต์ผู้ชนะ */
+        .winner-pop {
+            animation: pop-out 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            color: #ffde59;
+            text-shadow: 0 0 20px #ff914d, 2px 2px 0px #000;
+        }
+
+        @keyframes pop-out {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ปุ่ม 3D */
+        .btn-3d {
+            background: linear-gradient(to bottom, #ff7b00, #e64a19);
+            box-shadow: 0 12px 0 #bf360c, 0 20px 25px rgba(0,0,0,0.5);
+            transform: translateY(0);
+            transition: all 0.1s ease-out;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        .btn-3d:active, .btn-3d.pressing {
+            box-shadow: 0 0px 0 #bf360c, 0 5px 10px rgba(0,0,0,0.5);
+            transform: translateY(12px);
+        }
+
+        .btn-3d:disabled {
+            background: #888;
+            box-shadow: 0 12px 0 #555;
+            cursor: not-allowed;
+            color: #ccc;
+        }
+
+        /* หุ่นยนต์ */
+        .robot-container {
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .robot-blink {
+            animation: blink-scale 0.2s infinite alternate;
+            filter: brightness(1.2);
+        }
+
+        @keyframes blink-scale {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+
+        /* Speech Bubble */
+        .speech-bubble {
+            position: relative;
+            background: white;
+            border-radius: .4em;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .speech-bubble:after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border: 15px solid transparent;
+            border-top-color: white;
+            border-bottom: 0;
+            border-left: 0;
+            margin-left: -7.5px;
+            margin-bottom: -15px;
+        }
+
+        /* เอฟเฟกต์ Flash สว่างวาบ */
+        .screen-flash {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .screen-flash.active {
+            animation: flash-anim 0.5s ease-out;
+        }
+        @keyframes flash-anim {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #ff914d; border-radius: 4px; }
+    </style>
+</head>
+<body class="h-screen w-full flex flex-col items-center justify-between text-white relative">
+
+    <div class="sunburst-container"></div>
+    <div id="dimLayer" class="dim-layer"></div>
+    <div id="screenFlash" class="screen-flash"></div>
+
+    <header class="w-full p-6 flex justify-between items-center z-10">
+        <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400 drop-shadow-lg" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">
+            🎯 วงล้อเสี่ยงทาย
+        </h1>
+        <button onclick="openSettings()" class="text-3xl text-white hover:text-yellow-300 transition-colors drop-shadow-md">
+            <i class="fas fa-cog fa-spin-hover"></i>
+        </button>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row items-center justify-center w-full max-w-6xl px-4 gap-8 z-10">
+        
+        <div class="w-48 md:w-64 flex flex-col items-center robot-container" id="robotDiv">
+            <div class="speech-bubble text-black font-bold text-xl px-4 py-3 mb-4 text-center w-full shadow-xl">
+                <span id="robotText">พร้อมแล้ว!</span>
+            </div>
+            <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Robot.png" alt="Robot" class="w-full drop-shadow-2xl" id="robotImg">
+        </div>
+
+        <div class="chalkboard w-full max-w-2xl aspect-[16/9] flex items-center justify-center p-8">
+            <div id="resultDisplay" class="text-[8rem] md:text-[10rem] font-black text-white text-center leading-none truncate w-full">
+                ?
+            </div>
+        </div>
+
+    </main>
+
+    <div class="z-10 mt-8 mb-4">
+        <button id="spinBtn" onclick="startSpin()" class="btn-3d px-16 py-6 rounded-full text-5xl font-black border-4 border-white tracking-wide">
+            สุ่มเลย!
+        </button>
+    </div>
+
+    <footer class="w-full bg-black/60 backdrop-blur-sm p-4 z-10 border-t-2 border-white/20">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex-1 text-lg font-bold">
+                <span class="text-yellow-300"><i class="fas fa-users"></i> เหลือจำนวน:</span> 
+                <span id="remainingCount" class="text-2xl ml-2">0</span> คน
+            </div>
+            
+            <div class="flex-2 flex-wrap flex gap-2 justify-center items-center h-16 overflow-y-auto px-2 w-full max-w-3xl" id="historyContainer">
+                <span class="text-gray-400 text-sm">ยังไม่มีประวัติการสุ่ม</span>
+            </div>
+
+            <div class="flex-1 text-right flex justify-end">
+                <button onclick="resetPool()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-lg font-bold shadow-lg border-2 border-blue-300 transition-all active:scale-95">
+                    <i class="fas fa-redo-alt mr-2"></i>เริ่มรอบใหม่
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <div id="settingsModal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white text-black w-full max-w-md rounded-2xl overflow-hidden shadow-2xl transform transition-all">
+            <div class="bg-gradient-to-r from-orange-500 to-yellow-500 p-4 text-white flex justify-between items-center">
+                <h2 class="text-2xl font-black"><i class="fas fa-sliders-h mr-2"></i> ตั้งค่าการสุ่ม</h2>
+                <button onclick="closeSettings()" class="text-white hover:text-red-200 text-2xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="flex border-b">
+                <button onclick="switchTab('number')" id="tabBtn-number" class="flex-1 py-3 font-bold text-orange-600 border-b-4 border-orange-500 bg-orange-50">
+                    1. สุ่มเลขที่
+                </button>
+                <button onclick="switchTab('name')" id="tabBtn-name" class="flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-50">
+                    2. วางรายชื่อ
+                </button>
+            </div>
+
+            <div class="p-6">
+                <div id="tab-number" class="block space-y-4">
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <label class="block font-bold mb-1 text-gray-700">เลขเริ่มต้น</label>
+                            <input type="number" id="inputMin" value="1" min="1" class="w-full border-2 border-gray-300 rounded-lg p-3 text-xl font-bold focus:border-orange-500 focus:outline-none text-center">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block font-bold mb-1 text-gray-700">เลขสุดท้าย</label>
+                            <input type="number" id="inputMax" value="30" min="1" class="w-full border-2 border-gray-300 rounded-lg p-3 text-xl font-bold focus:border-orange-500 focus:outline-none text-center">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-name" class="hidden space-y-2">
+                    <label class="block font-bold text-gray-700">วางรายชื่อ (บรรทัดละ 1 ชื่อ)</label>
+                    <textarea id="inputNames" rows="5" placeholder="สมชาย&#10;สมศรี&#10;สมปอง" class="w-full border-2 border-gray-300 rounded-lg p-3 font-medium focus:border-orange-500 focus:outline-none resize-none"></textarea>
+                </div>
+
+                <button onclick="saveSettings()" class="w-full mt-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-3 rounded-lg font-black text-xl shadow-lg transition-transform active:scale-95">
+                    บันทึกและรีเซ็ตค่า
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* === ตัวแปรสถานะระบบ === */
+        let mode = 'number'; // 'number' หรือ 'name'
+        let initialPool = [];
+        let availablePool = [];
+        let history = [];
+        let isSpinning = false;
+
+        /* === การจัดการ UI เบื้องต้น === */
+        const resultDisplay = document.getElementById('resultDisplay');
+        const robotText = document.getElementById('robotText');
+        const robotImg = document.getElementById('robotImg');
+        const spinBtn = document.getElementById('spinBtn');
+        const dimLayer = document.getElementById('dimLayer');
+        const screenFlash = document.getElementById('screenFlash');
+        const historyContainer = document.getElementById('historyContainer');
+        const remainingCount = document.getElementById('remainingCount');
+
+        /* === Web Audio API (ระบบเสียงสังเคราะห์) === */
+        let audioCtx;
+        let drumRollOsc;
+        let drumRollGain;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // เสียงรัวกลอง
+        function playDrumRoll() {
+            initAudio();
+            const bufferSize = audioCtx.sampleRate * 4; // ความยาวบัฟเฟอร์
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // สร้าง White Noise เลียนแบบเสียงกลองสแนร์
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * 0.8;
+            }
+
+            drumRollOsc = audioCtx.createBufferSource();
+            drumRollOsc.buffer = buffer;
+
+            // ใส่ Filter ให้เสียงทุ้มขึ้นคล้ายหน้ากลอง
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+
+            drumRollGain = audioCtx.createGain();
+            drumRollGain.gain.setValueAtTime(0, audioCtx.currentTime);
+            // ค่อยๆ เพิ่มเสียงขึ้นสร้างความตื่นเต้น
+            drumRollGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 2.5);
+
+            drumRollOsc.connect(filter);
+            filter.connect(drumRollGain);
+            drumRollGain.connect(audioCtx.destination);
+            
+            drumRollOsc.start();
+        }
+
+        function stopDrumRoll() {
+            if (drumRollGain) {
+                drumRollGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+            }
+            if (drumRollOsc) {
+                setTimeout(() => drumRollOsc.stop(), 100);
+            }
+        }
+
+        // เสียงแตร Fanfare ยินดีด้วย (สังเคราะห์ 4 ตัวโน้ต)
+        function playFanfare() {
+            initAudio();
+            // C5, E5, G5, C6
+            const notes = [
+                { f: 523.25, time: 0, dur: 0.15 },
+                { f: 659.25, time: 0.15, dur: 0.15 },
+                { f: 783.99, time: 0.30, dur: 0.15 },
+                { f: 1046.50, time: 0.45, dur: 0.8 }
+            ];
+
+            notes.forEach(note => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = 'square'; // เสียง Square จะคล้ายๆ 8-bit เกม
+                osc.frequency.value = note.f;
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                gain.gain.setValueAtTime(0, audioCtx.currentTime + note.time);
+                gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + note.time + 0.02);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime + note.time + note.dur - 0.1);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + note.time + note.dur);
+
+                osc.start(audioCtx.currentTime + note.time);
+                osc.stop(audioCtx.currentTime + note.time + note.dur);
+            });
+        }
+
+        /* === ระบบการตั้งค่า === */
+        function openSettings() {
+            if(isSpinning) return;
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function switchTab(selectedMode) {
+            mode = selectedMode;
+            if (mode === 'number') {
+                document.getElementById('tab-number').classList.remove('hidden');
+                document.getElementById('tab-name').classList.add('hidden');
+                document.getElementById('tabBtn-number').className = "flex-1 py-3 font-bold text-orange-600 border-b-4 border-orange-500 bg-orange-50";
+                document.getElementById('tabBtn-name').className = "flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-50";
+            } else {
+                document.getElementById('tab-number').classList.add('hidden');
+                document.getElementById('tab-name').classList.remove('hidden');
+                document.getElementById('tabBtn-name').className = "flex-1 py-3 font-bold text-orange-600 border-b-4 border-orange-500 bg-orange-50";
+                document.getElementById('tabBtn-number').className = "flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-50";
+            }
+        }
+
+        function saveSettings() {
+            initialPool = [];
+            if (mode === 'number') {
+                const min = parseInt(document.getElementById('inputMin').value);
+                const max = parseInt(document.getElementById('inputMax').value);
+                if(min > max || isNaN(min) || isNaN(max)) {
+                    alert("กรุณาระบุช่วงตัวเลขให้ถูกต้อง");
+                    return;
+                }
+                for(let i = min; i <= max; i++) initialPool.push(i);
+            } else {
+                const text = document.getElementById('inputNames').value;
+                const names = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+                if(names.length === 0) {
+                    alert("กรุณาใส่รายชื่ออย่างน้อย 1 ชื่อ");
+                    return;
+                }
+                initialPool = names;
+            }
+            resetPool();
+            closeSettings();
+        }
+
+        function resetPool() {
+            if(isSpinning) return;
+            // ถ้าพูลเริ่มต้นว่าง ให้สร้างดีฟอลต์ 1-30
+            if(initialPool.length === 0) {
+                for(let i=1; i<=30; i++) initialPool.push(i);
+            }
+            availablePool = [...initialPool];
+            history = [];
+            updateUI();
+            resultDisplay.innerHTML = '?';
+            resultDisplay.className = 'text-[8rem] md:text-[10rem] font-black text-white text-center leading-none truncate w-full';
+            robotText.innerHTML = 'พร้อมแล้ว!';
+        }
+
+        function updateUI() {
+            remainingCount.innerText = availablePool.length;
+            if(history.length === 0) {
+                historyContainer.innerHTML = '<span class="text-gray-400 text-sm">ยังไม่มีประวัติการสุ่ม</span>';
+            } else {
+                historyContainer.innerHTML = history.map(item => 
+                    `<span class="bg-white/20 px-3 py-1 rounded-full text-sm font-bold border border-white/30 backdrop-blur-md shadow-sm">${item}</span>`
+                ).join('');
+                // เลื่อน scroll ไปขวาสุด
+                historyContainer.scrollTop = historyContainer.scrollHeight;
+            }
+        }
+
+        /* === ระบบการสุ่มและเอฟเฟกต์ === */
+        function startSpin() {
+            if(isSpinning) return;
+            if(availablePool.length === 0) {
+                robotText.innerHTML = '<span class="text-red-500">หมดแล้วจ้า!</span>';
+                return;
+            }
+
+            isSpinning = true;
+            initAudio(); // ป้องกันการบล็อกเสียงจากเบราว์เซอร์
+            
+            // ล็อคปุ่ม
+            spinBtn.disabled = true;
+            spinBtn.classList.add('pressing');
+            spinBtn.innerText = 'กำลังสุ่ม...';
+
+            // เอฟเฟกต์เริ่มต้น (มืดลง, หุ่นยนต์กระพริบ, ข้อความวิ่ง)
+            dimLayer.classList.add('active');
+            robotImg.classList.add('robot-blink');
+            robotText.innerHTML = '<i class="fas fa-search fa-spin text-orange-500"></i> กำลังค้นหา...';
+            resultDisplay.classList.remove('winner-pop');
+            resultDisplay.classList.add('slot-rolling');
+
+            playDrumRoll();
+
+            let spinInterval;
+            let counter = 0;
+            const spinDuration = 3000; // เวลาวิ่ง 3 วินาที
+            const speed = 50; // เปลี่ยนข้อความทุกๆ 50ms
+
+            spinInterval = setInterval(() => {
+                const randomVisualIndex = Math.floor(Math.random() * availablePool.length);
+                resultDisplay.innerText = availablePool[randomVisualIndex];
+                counter += speed;
+
+                // เมื่อครบเวลา
+                if(counter >= spinDuration) {
+                    clearInterval(spinInterval);
+                    finishSpin();
+                }
+            }, speed);
+        }
+
+        function finishSpin() {
+            stopDrumRoll();
+            
+            // สุ่มผู้ชนะตัวจริง
+            const winIndex = Math.floor(Math.random() * availablePool.length);
+            const winner = availablePool.splice(winIndex, 1)[0]; // ดึงออกและเก็บไว้
+
+            // ลบเอฟเฟกต์วิ่ง
+            dimLayer.classList.remove('active');
+            robotImg.classList.remove('robot-blink');
+            resultDisplay.classList.remove('slot-rolling');
+            
+            // แสดงผลผู้ชนะ
+            resultDisplay.innerText = winner;
+            resultDisplay.classList.add('winner-pop');
+            
+            // เอฟเฟกต์ชัยชนะ
+            screenFlash.classList.add('active');
+            setTimeout(() => screenFlash.classList.remove('active'), 500); // รีเซ็ต Flash
+            
+            robotText.innerHTML = '<span class="text-green-600">ว้าว!! ยินดีด้วย!</span>';
+            playFanfare();
+            shootConfetti();
+
+            // อัปเดตประวัติ
+            history.push(winner);
+            updateUI();
+
+            // คืนค่าปุ่ม
+            setTimeout(() => {
+                isSpinning = false;
+                spinBtn.disabled = false;
+                spinBtn.classList.remove('pressing');
+                spinBtn.innerText = 'สุ่มเลย!';
+            }, 1000);
+        }
+
+        function shootConfetti() {
+            const duration = 3 * 1000;
+            const animationEnd = Date.now() + duration;
+            const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+            function randomInRange(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+
+            const interval = setInterval(function() {
+                const timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                const particleCount = 50 * (timeLeft / duration);
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+            }, 250);
+        }
+
+        // เริ่มต้นการทำงานครั้งแรก
+        resetPool();
+    </script>
+</body>
+</html>

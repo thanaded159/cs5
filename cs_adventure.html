@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ตะลุยโลกวิทยาการข้อมูล - บอร์ดเกมการศึกษา</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Load Tone.js for Sound Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            touch-action: manipulation; /* Prevent zoom on double tap */
+        }
+
+        /* 3D Button Effects */
+        .btn-3d {
+            transition: all 0.1s ease;
+            box-shadow: 0 6px 0px rgba(0,0,0,0.2);
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0px rgba(0,0,0,0.2);
+        }
+
+        /* Board Tile 3D Effect */
+        .tile-3d {
+            box-shadow: inset 0px -4px 0px rgba(0,0,0,0.15), 0px 4px 6px rgba(0,0,0,0.1);
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+
+        /* Central Island 3D */
+        .island-3d {
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15), inset 0px -8px 0px rgba(0,0,0,0.05);
+            background: #ffffff;
+            border-radius: 2rem;
+        }
+
+        /* Dice Animation */
+        @keyframes roll {
+            0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+            25% { transform: rotateX(180deg) rotateY(90deg) rotateZ(45deg); }
+            50% { transform: rotateX(360deg) rotateY(180deg) rotateZ(90deg); }
+            75% { transform: rotateX(540deg) rotateY(270deg) rotateZ(135deg); }
+            100% { transform: rotateX(720deg) rotateY(360deg) rotateZ(180deg); }
+        }
+        .rolling {
+            animation: roll 0.6s ease-in-out;
+        }
+
+        /* Token Animation */
+        .player-token {
+            transition: top 0.4s ease-in-out, left 0.4s ease-in-out;
+            filter: drop-shadow(0px 4px 3px rgba(0,0,0,0.4));
+        }
+
+        /* Pulse for current player */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .active-player::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 3px solid #ff0;
+            animation: pulse-ring 1s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-2 md:p-4 overflow-hidden relative select-none">
+
+    <!-- Start Menu Overlay -->
+    <div id="start-menu" class="absolute inset-0 bg-sky-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 border-sky-300 transform transition-transform duration-300 scale-100 island-3d">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-blue-600 mb-2 drop-shadow-md">ตะลุยโลก</h1>
+            <h2 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-blue-500 mb-6 drop-shadow-sm">วิทยาการข้อมูล</h2>
+            <p class="text-gray-600 mb-8 font-semibold">ภารกิจกู้ชีพ! ใช้ข้อมูลเพื่อเป็นสุดยอดนักเอาตัวรอด</p>
+            
+            <div class="space-y-4">
+                <button onclick="startGame('ai')" class="w-full btn-3d bg-gradient-to-r from-blue-400 to-blue-600 text-white font-bold py-4 px-6 rounded-xl text-xl flex items-center justify-center gap-3">
+                    <span class="text-2xl">👦 🆚 🤖</span> เล่นกับ AI
+                </button>
+                <button onclick="startGame('2p')" class="w-full btn-3d bg-gradient-to-r from-green-400 to-green-600 text-white font-bold py-4 px-6 rounded-xl text-xl flex items-center justify-center gap-3">
+                    <span class="text-2xl">👦 🆚 👧</span> เล่น 2 คน
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Container (A4 Proportions) -->
+    <div id="game-container" class="hidden w-full max-w-[1200px] flex-col h-full max-h-[90vh]">
+        
+        <!-- Header / Status -->
+        <div class="flex justify-between items-center bg-white/90 backdrop-blur rounded-2xl p-3 shadow-lg mb-2 border-2 border-white">
+            <div id="p1-status" class="flex items-center gap-2 bg-blue-100 p-2 px-4 rounded-xl font-bold text-blue-800 border-2 border-blue-300 transition-all">
+                <div class="text-2xl">👦</div> 
+                <div>
+                    <div class="text-sm opacity-80 leading-tight">ผู้เล่น 1</div>
+                    <div class="text-lg leading-tight">ช่อง: <span id="p1-score">0</span></div>
+                </div>
+            </div>
+            
+            <div class="text-center hidden md:block">
+                <h1 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-500 tracking-wide">
+                    ตะลุยโลกวิทยาการข้อมูล 🚁
+                </h1>
+            </div>
+
+            <div id="p2-status" class="flex items-center gap-2 bg-gray-100 p-2 px-4 rounded-xl font-bold text-gray-500 border-2 border-gray-300 transition-all opacity-70">
+                <div class="text-2xl" id="p2-icon">🤖</div> 
+                <div>
+                    <div class="text-sm opacity-80 leading-tight" id="p2-name">AI</div>
+                    <div class="text-lg leading-tight">ช่อง: <span id="p2-score">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- The Board (Aspect Ratio ~ A4 Landscape) -->
+        <div class="relative w-full aspect-[1.414/1] bg-[#dcfce7] rounded-3xl shadow-2xl border-4 border-[#86efac] overflow-hidden flex-shrink-0" id="board-area">
+            
+            <!-- Center Content (Data Science Steps & Decor) -->
+            <div class="absolute inset-0 pointer-events-none" style="margin: 11% 10%;">
+                <div class="w-full h-full island-3d relative flex items-center justify-center border-4 border-teal-100">
+                    <!-- Decor background elements -->
+                    <div class="absolute top-4 left-4 text-4xl opacity-50">☁️</div>
+                    <div class="absolute top-8 right-8 text-5xl opacity-50">☁️</div>
+                    <div class="absolute bottom-4 left-10 text-3xl">🌲</div>
+                    <div class="absolute bottom-6 right-10 text-4xl">🚑</div>
+                    <div class="absolute top-6 right-20 text-4xl animate-bounce">🚁</div>
+                    
+                    <div class="text-center w-full px-4">
+                        <h2 class="text-xl md:text-3xl font-black text-teal-600 mb-1">กระบวนการวิทยาการข้อมูล 5 ขั้นตอน</h2>
+                        <h3 class="text-sm md:text-lg font-bold text-orange-500 mb-4">พิชิตภัยพิบัติ! 🌪️</h3>
+                        
+                        <!-- The 5 Steps -->
+                        <div class="flex flex-col md:flex-row justify-center items-center gap-2 md:gap-4 flex-wrap">
+                            <div class="bg-pink-100 border-2 border-pink-300 p-2 rounded-xl shadow-md w-full md:w-32 text-center tile-3d">
+                                <div class="text-2xl">❓</div>
+                                <div class="font-bold text-pink-700 text-xs md:text-sm">1. ตั้งคำถาม</div>
+                                <div class="text-[10px] text-gray-600 leading-tight">ปัญหาคืออะไร?</div>
+                            </div>
+                            <div class="hidden md:block text-teal-300 font-black">▶</div>
+                            <div class="bg-blue-100 border-2 border-blue-300 p-2 rounded-xl shadow-md w-full md:w-32 text-center tile-3d">
+                                <div class="text-2xl">📥</div>
+                                <div class="font-bold text-blue-700 text-xs md:text-sm">2. รวบรวม</div>
+                                <div class="text-[10px] text-gray-600 leading-tight">หาข้อมูลจากไหน?</div>
+                            </div>
+                            <div class="hidden md:block text-teal-300 font-black">▶</div>
+                            <div class="bg-purple-100 border-2 border-purple-300 p-2 rounded-xl shadow-md w-full md:w-32 text-center tile-3d">
+                                <div class="text-2xl">🔍</div>
+                                <div class="font-bold text-purple-700 text-xs md:text-sm">3. สำรวจ</div>
+                                <div class="text-[10px] text-gray-600 leading-tight">ทำความสะอาดข้อมูล</div>
+                            </div>
+                            <div class="hidden md:block text-teal-300 font-black">▶</div>
+                            <div class="bg-orange-100 border-2 border-orange-300 p-2 rounded-xl shadow-md w-full md:w-32 text-center tile-3d">
+                                <div class="text-2xl">🧠</div>
+                                <div class="font-bold text-orange-700 text-xs md:text-sm">4. วิเคราะห์</div>
+                                <div class="text-[10px] text-gray-600 leading-tight">หาคำตอบ/คาดการณ์</div>
+                            </div>
+                            <div class="hidden md:block text-teal-300 font-black">▶</div>
+                            <div class="bg-green-100 border-2 border-green-300 p-2 rounded-xl shadow-md w-full md:w-32 text-center tile-3d">
+                                <div class="text-2xl">📊</div>
+                                <div class="font-bold text-green-700 text-xs md:text-sm">5. นำเสนอ</div>
+                                <div class="text-[10px] text-gray-600 leading-tight">สื่อสารเพื่อกู้ชีพ!</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CSS Grid for Board Spaces (12x10) -->
+            <div class="absolute inset-0 grid grid-cols-12 grid-rows-10 gap-1 p-2" id="grid-container">
+                <!-- Tiles will be injected here via JS -->
+            </div>
+
+            <!-- Player Tokens -->
+            <div id="token-p1" class="player-token absolute w-8 h-8 md:w-10 md:h-10 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center text-xl md:text-2xl z-20 shadow-lg transform -translate-x-1/2 -translate-y-1/2">👦</div>
+            <div id="token-p2" class="player-token absolute w-8 h-8 md:w-10 md:h-10 bg-gray-600 rounded-full border-2 border-white flex items-center justify-center text-xl md:text-2xl z-20 shadow-lg transform -translate-x-1/2 -translate-y-1/2 mt-2 ml-2">🤖</div>
+        </div>
+
+        <!-- Footer / Controls -->
+        <div class="mt-2 flex items-center justify-between bg-white rounded-2xl p-3 shadow-lg border-2 border-gray-100 flex-shrink-0">
+            <div class="flex-1">
+                <div class="bg-gray-100 rounded-xl p-2 px-4 border border-gray-200 h-full flex items-center">
+                    <span id="game-log" class="text-sm md:text-base text-gray-700 font-medium">ยินดีต้อนรับสู่ภารกิจ! กดทอยลูกเต๋าเพื่อเริ่มเกม</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4 ml-4">
+                <div id="dice-display" class="w-12 h-12 md:w-16 md:h-16 bg-white border-4 border-blue-500 rounded-2xl shadow-inner flex items-center justify-center text-2xl md:text-4xl font-black text-blue-600 tile-3d">
+                    🎲
+                </div>
+                <button id="roll-btn" onclick="rollDice()" class="btn-3d bg-gradient-to-r from-orange-400 to-red-500 text-white font-black text-lg md:text-xl py-3 px-6 md:px-8 rounded-xl flex items-center gap-2">
+                    ทอยลูกเต๋า
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal System -->
+    <div id="modal-overlay" class="hidden absolute inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        
+        <!-- Info Modal -->
+        <div id="info-modal" class="hidden bg-white p-6 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 transform transition-all island-3d">
+            <div id="info-icon" class="text-6xl mb-4 drop-shadow-md">✨</div>
+            <h2 id="info-title" class="text-2xl font-black mb-2">หัวข้อ</h2>
+            <p id="info-desc" class="text-gray-700 font-medium text-lg mb-6 leading-relaxed">รายละเอียด...</p>
+            <button onclick="closeModal()" class="btn-3d w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl text-lg">
+                ตกลง
+            </button>
+        </div>
+
+        <!-- Question Modal -->
+        <div id="question-modal" class="hidden bg-white p-6 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 border-red-400 transform transition-all island-3d">
+            <div class="text-5xl mb-2 drop-shadow-md">❓</div>
+            <h2 class="text-xl font-black text-red-600 mb-1">คำถามวิทยาการข้อมูล!</h2>
+            <p id="question-text" class="text-gray-800 font-semibold text-lg mb-6 leading-relaxed bg-red-50 p-4 rounded-xl border border-red-100">คำถาม...</p>
+            <div id="answer-buttons" class="space-y-3">
+                <!-- Answer buttons injected here -->
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div id="gameover-modal" class="hidden bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 border-yellow-400 transform transition-all island-3d">
+            <div class="text-7xl mb-4 drop-shadow-md animate-bounce">🏆</div>
+            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-orange-500 mb-2">สุดยอดนักเอาตัวรอด!</h2>
+            <p id="winner-text" class="text-xl text-gray-700 font-bold mb-6">ผู้เล่น 1 ชนะ!</p>
+            <button onclick="location.reload()" class="btn-3d w-full bg-gradient-to-r from-green-400 to-green-600 text-white font-bold py-4 px-6 rounded-xl text-xl">
+                เล่นอีกครั้ง 🔄
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // Game Configuration Data
+        const boardColors = {
+            START: 'bg-white border-gray-300 text-gray-700',
+            RED: 'bg-red-400 border-red-600 text-white',      // Data Question
+            BLUE: 'bg-blue-400 border-blue-600 text-white',    // Trivia
+            GREEN: 'bg-green-400 border-green-600 text-white',  // Rescue Mission
+            PURPLE: 'bg-purple-400 border-purple-600 text-white',// Random
+            ORANGE: 'bg-orange-500 border-orange-700 text-white', // Danger
+            GOLD: 'bg-yellow-400 border-yellow-600 text-yellow-900', // Lucky
+            HERO: 'bg-gradient-to-br from-yellow-300 via-pink-400 to-purple-500 border-pink-300 text-white', // Special
+            FINISH: 'bg-gradient-to-r from-yellow-400 to-orange-500 border-yellow-600 text-white font-black'
+        };
+
+        const types = {
+            START: { color: boardColors.START, label: 'START', icon: '🏁' },
+            DATA: { color: boardColors.RED, label: 'คำถาม Data', icon: '📊' },
+            TRIVIA: { color: boardColors.BLUE, label: 'ความรู้รอบตัว', icon: '💡' },
+            RESCUE: { color: boardColors.GREEN, label: 'ภารกิจกู้ชีพ', icon: '🚁' },
+            RANDOM: { color: boardColors.PURPLE, label: 'สุ่มสถานการณ์', icon: '🃏' },
+            DANGER: { color: boardColors.ORANGE, label: 'อันตราย!', icon: '⚠️' },
+            LUCKY: { color: boardColors.GOLD, label: 'โชคดี!', icon: '🌟' },
+            HERO: { color: boardColors.HERO, label: 'ฮีโร่น้อย!', icon: '🦸' },
+            FINISH: { color: boardColors.FINISH, label: 'ชัยชนะ!', icon: '🏆' }
+        };
+
+        // Custom Mapping for 40 spaces
+        const spaceMap = [
+            types.START,    // 0
+            types.DATA,     // 1
+            types.TRIVIA,   // 2
+            types.RESCUE,   // 3
+            types.DATA,     // 4
+            types.RANDOM,   // 5
+            types.TRIVIA,   // 6
+            types.RESCUE,   // 7
+            types.DATA,     // 8
+            types.DANGER,   // 9
+            types.TRIVIA,   // 10
+            types.RANDOM,   // 11
+            types.DATA,     // 12
+            types.RESCUE,   // 13
+            types.TRIVIA,   // 14
+            types.HERO,     // 15 - Special
+            types.DATA,     // 16
+            types.DANGER,   // 17
+            types.TRIVIA,   // 18
+            types.RANDOM,   // 19
+            types.RESCUE,   // 20
+            types.DATA,     // 21
+            types.LUCKY,    // 22
+            types.TRIVIA,   // 23
+            types.DANGER,   // 24
+            types.DATA,     // 25
+            types.RESCUE,   // 26
+            types.TRIVIA,   // 27
+            types.RANDOM,   // 28
+            types.DATA,     // 29
+            types.LUCKY,    // 30
+            types.TRIVIA,   // 31
+            types.RESCUE,   // 32
+            types.DATA,     // 33
+            types.RANDOM,   // 34
+            types.TRIVIA,   // 35
+            types.RESCUE,   // 36
+            types.DATA,     // 37
+            types.TRIVIA,   // 38
+            types.FINISH    // 39
+        ];
+
+        const dataQuestions = [
+            { q: "ขั้นตอนแรกสุดของวิทยาการข้อมูลคืออะไร?", options: ["การวิเคราะห์", "การตั้งคำถาม", "การรวบรวมข้อมูล"], a: 1 },
+            { q: "ถ้าต้องการหาอุณหภูมิเฉลี่ย ควรใช้ข้อมูลประเภทใด?", options: ["ตัวอักษร (Text)", "รูปภาพ (Image)", "ตัวเลข (Numeric)"], a: 2 },
+            { q: "การนำข้อมูลที่ผิดพลาดออก เรียกว่าอะไร?", options: ["Data Cleaning", "Data Presenting", "Data Asking"], a: 0 },
+            { q: "แผนภูมิแบบใดเหมาะกับการดูสัดส่วน (เปอร์เซ็นต์)?", options: ["กราฟเส้น", "แผนภูมิวงกลม", "กราฟแท่ง"], a: 1 },
+            { q: "Machine Learning คือการสอนให้ใครเรียนรู้?", options: ["สุนัข", "มนุษย์", "คอมพิวเตอร์ (AI)"], a: 2 },
+            { q: "เซ็นเซอร์วัดปริมาณน้ำฝน เป็นขั้นตอนใดใน Data Science?", options: ["การรวบรวมข้อมูล", "การนำเสนอ", "การตั้งคำถาม"], a: 0 },
+            { q: "ข้อมูลดิบ (Raw Data) เปรียบเหมือนสิ่งใด?", options: ["อาหารที่ปรุงสุกแล้ว", "วัตถุดิบที่ยังไม่ได้ทำอาหาร", "จานข้าว"], a: 1 }
+        ];
+
+        const triviaQuestions = [
+            { q: "เบอร์โทรฉุกเฉินแจ้งเหตุด่วนเหตุร้ายในไทยคือ?", options: ["191", "1669", "1111"], a: 0 },
+            { q: "เบอร์โทรฉุกเฉินเรียกรถพยาบาล (กู้ชีพ) คือ?", options: ["191", "1669", "1150"], a: 1 },
+            { q: "เมื่อเกิดแผ่นดินไหวขณะอยู่ในอาคาร ควรทำอย่างไรเป็นอันดับแรก?", options: ["วิ่งลงบันได", "หลบใต้โต๊ะที่แข็งแรง", "กระโดดออกหน้าต่าง"], a: 1 },
+            { q: "อุปกรณ์ใดสำคัญที่สุดเวลาล่องเรือหรือเกิดน้ำท่วม?", options: ["ไฟฉาย", "เสื้อชูชีพ", "หมวกกันน็อค"], a: 1 },
+            { q: "หากได้กลิ่นแก๊สรั่วในบ้าน สิ่งที่ห้ามทำเด็ดขาดคือ?", options: ["เปิดหน้าต่าง", "ปิดวาล์วแก๊ส", "เปิดสวิตช์ไฟ"], a: 2 }
+        ];
+
+        const events = {
+            RESCUE: [
+                { text: "ใช้ข้อมูลหาตำแหน่งผู้หลงป่าสำเร็จ! 🌲", move: 2, icon: "🚁" },
+                { text: "ส่งเสบียงให้พื้นที่น้ำท่วมสำเร็จ! 🍞", move: 1, icon: "🚤" },
+                { text: "เตือนภัยแผ่นดินไหวล่วงหน้าได้ทันเวลา! 📢", move: 2, icon: "⚡" }
+            ],
+            RANDOM: [
+                { text: "แบตเตอรี่เครื่องมือสื่อสารหมด 🪫 ถอยหลัง 1 ช่อง", move: -1, icon: "📱" },
+                { text: "อัปเกรดระบบ AI วิเคราะห์ข้อมูลสำเร็จ! 💻 เดินหน้า 2 ช่อง", move: 2, icon: "🧠" },
+                { text: "เจอพายุฝนกระหน่ำ มองไม่เห็นทาง 🌧️ ถอยหลัง 1 ช่อง", move: -1, icon: "⛈️" }
+            ],
+            DANGER: [
+                { text: "ข้อมูลสูญหายเพราะไวรัส! 🦠 ถอยหลัง 2 ช่อง", move: -2, icon: "💻" },
+                { text: "ดินถล่มขวางทางรถพยาบาล! 🪨 ถอยหลัง 3 ช่อง", move: -3, icon: "🚑" },
+                { text: "แปลผลข้อมูลผิดพลาด ทำให้หลงทาง! 🧭 ถอยหลัง 2 ช่อง", move: -2, icon: "❌" }
+            ],
+            LUCKY: [
+                { text: "ชาวบ้านท้องถิ่นมาช่วยนำทางลัดให้! 🧑‍🌾 เดินหน้า 3 ช่อง", move: 3, icon: "🗺️" },
+                { text: "ค้นพบชุดข้อมูล (Dataset) สะอาดพร้อมใช้! ✨ เดินหน้า 2 ช่อง", move: 2, icon: "📂" }
+            ],
+            HERO: [
+                { text: "สุดยอด! คุณคือฮีโร่น้อยพิชิตภัย 🦸 นำข้อมูลเตือนหมู่บ้านปลอดภัย เดินหน้า 4 ช่อง!!", move: 4, icon: "🌟" }
+            ]
+        };
+
+        // State
+        let gameState = {
+            mode: 'ai', // 'ai' or '2p'
+            turn: 1, // 1 or 2
+            players: [
+                { id: 1, pos: 0, name: 'ผู้เล่น 1', icon: '👦' },
+                { id: 2, pos: 0, name: 'AI', icon: '🤖' }
+            ],
+            isRolling: false,
+            awaitingAction: false
+        };
+
+        // Audio System (Tone.js)
+        let synths = {};
+        function initAudio() {
+            if (synths.ready) return;
+            // Simple synth for basic sounds
+            synths.synth = new Tone.Synth().toDestination();
+            synths.poly = new Tone.PolySynth(Tone.Synth).toDestination();
+            synths.ready = true;
+        }
+
+        function playSound(type) {
+            if (!synths.ready) return;
+            const now = Tone.now();
+            switch (type) {
+                case 'roll':
+                    synths.synth.triggerAttackRelease("C5", "32n", now);
+                    setTimeout(() => synths.synth.triggerAttackRelease("E5", "32n", Tone.now()), 100);
+                    setTimeout(() => synths.synth.triggerAttackRelease("G5", "32n", Tone.now()), 200);
+                    break;
+                case 'move':
+                    synths.synth.triggerAttackRelease("A4", "32n", now);
+                    break;
+                case 'win':
+                    synths.poly.triggerAttackRelease(["C4", "E4", "G4", "C5"], "2n", now);
+                    break;
+                case 'correct':
+                    synths.poly.triggerAttackRelease(["C5", "E5", "G5"], "8n", now);
+                    break;
+                case 'wrong':
+                    synths.synth.triggerAttackRelease("C3", "4n", now);
+                    break;
+                case 'danger':
+                    synths.poly.triggerAttackRelease(["G2", "C3"], "4n", now);
+                    break;
+                case 'lucky':
+                    synths.poly.triggerAttackRelease(["G4", "B4", "D5"], "4n", now);
+                    break;
+            }
+        }
+
+        // Mapping 40 spaces to 12x10 CSS Grid perimeter
+        function getGridCoordinates(index) {
+            // Path logic: Top (12), Right (8), Bottom (12), Left (8)
+            if (index < 12) {
+                return { col: index + 1, row: 1 };
+            } else if (index < 20) {
+                return { col: 12, row: (index - 12) + 2 };
+            } else if (index < 32) {
+                return { col: 12 - (index - 20), row: 10 };
+            } else {
+                return { col: 1, row: 10 - (index - 32 + 1) };
+            }
+        }
+
+        function renderBoard() {
+            const grid = document.getElementById('grid-container');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 40; i++) {
+                const space = spaceMap[i];
+                const coords = getGridCoordinates(i);
+                
+                const cell = document.createElement('div');
+                cell.className = `tile-3d flex flex-col items-center justify-center rounded-lg text-xs md:text-sm font-bold shadow-sm relative overflow-hidden ${space.color}`;
+                cell.style.gridColumnStart = coords.col;
+                cell.style.gridRowStart = coords.row;
+
+                // Index number
+                const num = document.createElement('div');
+                num.className = 'absolute top-0 left-1 text-[10px] opacity-70 font-black';
+                num.innerText = i;
+                
+                // Icon
+                const icon = document.createElement('div');
+                icon.className = 'text-lg md:text-2xl drop-shadow-sm';
+                icon.innerText = space.icon;
+
+                cell.appendChild(num);
+                cell.appendChild(icon);
+                grid.appendChild(cell);
+            }
+            updateTokenPositions();
+        }
+
+        function updateTokenPositions() {
+            gameState.players.forEach((p, idx) => {
+                const token = document.getElementById(`token-p${p.id}`);
+                const coords = getGridCoordinates(p.pos);
+                
+                // Calculate percentage based on grid cells
+                // Col 1-12 -> 8.33% each. Row 1-10 -> 10% each.
+                const xPercent = ((coords.col - 1) * 8.333) + 4.166; 
+                const yPercent = ((coords.row - 1) * 10) + 5;
+
+                // Offset slightly to prevent overlap if on same space
+                const offset = (gameState.players[0].pos === gameState.players[1].pos) 
+                    ? (idx === 0 ? -1 : 1) : 0;
+
+                token.style.left = `calc(${xPercent}% + ${offset * 10}px)`;
+                token.style.top = `calc(${yPercent}% + ${offset * 10}px)`;
+                
+                // Update score display
+                document.getElementById(`p${p.id}-score`).innerText = p.pos;
+            });
+        }
+
+        async function startGame(mode) {
+            await Tone.start(); // Required by browsers
+            initAudio();
+
+            gameState.mode = mode;
+            gameState.players[1].name = mode === 'ai' ? 'AI' : 'ผู้เล่น 2';
+            gameState.players[1].icon = mode === 'ai' ? '🤖' : '👧';
+            
+            document.getElementById('p2-name').innerText = gameState.players[1].name;
+            document.getElementById('p2-icon').innerText = gameState.players[1].icon;
+            document.getElementById('token-p2').innerText = gameState.players[1].icon;
+            if (mode === '2p') document.getElementById('token-p2').classList.replace('bg-gray-600', 'bg-pink-500');
+
+            document.getElementById('start-menu').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('hidden');
+            document.getElementById('game-container').classList.add('flex');
+
+            renderBoard();
+            updateTurnUI();
+        }
+
+        function updateTurnUI() {
+            const p1Box = document.getElementById('p1-status');
+            const p2Box = document.getElementById('p2-status');
+            
+            if (gameState.turn === 1) {
+                p1Box.classList.remove('opacity-70', 'bg-gray-100', 'border-gray-300');
+                p1Box.classList.add('bg-blue-100', 'border-blue-300', 'active-player');
+                p2Box.classList.add('opacity-70', 'bg-gray-100', 'border-gray-300');
+                p2Box.classList.remove('bg-pink-100', 'border-pink-300', 'bg-gray-200', 'border-gray-400', 'active-player');
+            } else {
+                p2Box.classList.remove('opacity-70', 'bg-gray-100', 'border-gray-300');
+                p2Box.classList.add(gameState.mode === 'ai' ? 'bg-gray-200' : 'bg-pink-100', 
+                                  gameState.mode === 'ai' ? 'border-gray-400' : 'border-pink-300', 'active-player');
+                p1Box.classList.add('opacity-70', 'bg-gray-100', 'border-gray-300');
+                p1Box.classList.remove('bg-blue-100', 'border-blue-300', 'active-player');
+            }
+
+            const currentPlayer = gameState.players[gameState.turn - 1];
+            log(`ตาของ ${currentPlayer.name}`);
+
+            const rollBtn = document.getElementById('roll-btn');
+            if (gameState.mode === 'ai' && gameState.turn === 2) {
+                rollBtn.disabled = true;
+                rollBtn.classList.add('opacity-50');
+                setTimeout(aiTurn, 1500); // AI wait before rolling
+            } else {
+                rollBtn.disabled = false;
+                rollBtn.classList.remove('opacity-50');
+            }
+        }
+
+        function log(msg) {
+            document.getElementById('game-log').innerText = msg;
+        }
+
+        async function rollDice() {
+            if (gameState.isRolling || gameState.awaitingAction) return;
+            gameState.isRolling = true;
+            document.getElementById('roll-btn').disabled = true;
+
+            const dice = document.getElementById('dice-display');
+            dice.classList.add('rolling');
+            playSound('roll');
+
+            // Simulate rolling
+            let result = 1;
+            const rollInterval = setInterval(() => {
+                result = Math.floor(Math.random() * 6) + 1;
+                dice.innerText = ['⚀','⚁','⚂','⚃','⚄','⚅'][result-1];
+            }, 100);
+
+            setTimeout(async () => {
+                clearInterval(rollInterval);
+                dice.classList.remove('rolling');
+                const finalRoll = Math.floor(Math.random() * 6) + 1;
+                dice.innerText = ['⚀','⚁','⚂','⚃','⚄','⚅'][finalRoll-1];
+                log(`${gameState.players[gameState.turn-1].name} ทอยได้ ${finalRoll}`);
+                
+                await movePlayer(finalRoll);
+                
+            }, 600);
+        }
+
+        async function movePlayer(steps) {
+            const player = gameState.players[gameState.turn - 1];
+            
+            for (let i = 0; i < Math.abs(steps); i++) {
+                if (steps > 0) player.pos++; else player.pos--;
+                
+                // Boundaries
+                if (player.pos > 39) player.pos = 39;
+                if (player.pos < 0) player.pos = 0;
+
+                updateTokenPositions();
+                playSound('move');
+                await new Promise(r => setTimeout(r, 300));
+
+                if (player.pos === 39 || player.pos === 0) break;
+            }
+
+            if (player.pos >= 39) {
+                triggerGameOver(player);
+                return;
+            }
+
+            resolveSpace(player.pos);
+        }
+
+        function resolveSpace(index) {
+            const space = spaceMap[index];
+            gameState.awaitingAction = true;
+
+            if (space === types.DATA) {
+                showQuestionModal(dataQuestions, 'คำถามวิทยาการข้อมูล!');
+            } else if (space === types.TRIVIA) {
+                showQuestionModal(triviaQuestions, 'ความรู้รอบตัว กู้ภัย!');
+            } else if (space === types.RESCUE) {
+                showEventModal('ภารกิจกู้ชีพ', events.RESCUE, 'bg-green-500', 'lucky');
+            } else if (space === types.RANDOM) {
+                showEventModal('การ์ดสุ่มสถานการณ์', events.RANDOM, 'bg-purple-500', 'roll');
+            } else if (space === types.DANGER) {
+                showEventModal('อันตราย!', events.DANGER, 'bg-orange-600 border-orange-400', 'danger');
+            } else if (space === types.LUCKY) {
+                showEventModal('โชคดี!', events.LUCKY, 'bg-yellow-400 border-yellow-300 text-yellow-900', 'lucky');
+            } else if (space === types.HERO) {
+                showEventModal('ฮีโร่น้อยพิชิตภัย!', events.HERO, 'bg-pink-500 border-yellow-400 text-white', 'win');
+            } else {
+                // START or plain space
+                endTurn();
+            }
+        }
+
+        function showEventModal(title, eventArray, colorClass, soundType) {
+            playSound(soundType);
+            const ev = eventArray[Math.floor(Math.random() * eventArray.length)];
+            
+            document.getElementById('info-icon').innerText = ev.icon;
+            document.getElementById('info-title').innerText = title;
+            document.getElementById('info-title').className = `text-2xl font-black mb-2 text-gray-800`;
+            document.getElementById('info-desc').innerText = ev.text;
+            
+            const modal = document.getElementById('info-modal');
+            modal.className = `hidden p-6 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 transform transition-all island-3d ${colorClass}`;
+            
+            // Re-apply base classes that might have been overwritten
+            modal.classList.remove('hidden');
+            document.getElementById('modal-overlay').classList.remove('hidden');
+
+            // Store pending move logic
+            modal.dataset.pendingMove = ev.move;
+
+            if (gameState.mode === 'ai' && gameState.turn === 2) {
+                setTimeout(closeModal, 2500); // AI auto close
+            }
+        }
+
+        function showQuestionModal(qArray, titleText) {
+            playSound('roll'); // alert sound
+            const qObj = qArray[Math.floor(Math.random() * qArray.length)];
+            
+            document.querySelector('#question-modal h2').innerText = titleText;
+            document.getElementById('question-text').innerText = qObj.q;
+            
+            const btnContainer = document.getElementById('answer-buttons');
+            btnContainer.innerHTML = '';
+            
+            qObj.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full btn-3d bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold py-3 px-4 rounded-xl text-left border-2 border-blue-300 flex items-center gap-3';
+                btn.innerHTML = `<span class="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0">${idx+1}</span> ${opt}`;
+                
+                if (gameState.mode === 'ai' && gameState.turn === 2) {
+                    btn.disabled = true; // prevent user clicking during AI turn
+                } else {
+                    btn.onclick = () => handleAnswer(idx, qObj.a);
+                }
+                
+                btnContainer.appendChild(btn);
+            });
+
+            document.getElementById('question-modal').classList.remove('hidden');
+            document.getElementById('modal-overlay').classList.remove('hidden');
+
+            if (gameState.mode === 'ai' && gameState.turn === 2) {
+                // AI decides answer (80% chance correct)
+                setTimeout(() => {
+                    const isCorrect = Math.random() < 0.8;
+                    const choice = isCorrect ? qObj.a : (qObj.a + 1) % qObj.options.length;
+                    handleAnswer(choice, qObj.a);
+                }, 3000);
+            }
+        }
+
+        async function handleAnswer(selected, correct) {
+            document.getElementById('question-modal').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.add('hidden');
+            
+            if (selected === correct) {
+                playSound('correct');
+                log('ตอบถูก! เดินหน้า 1 ช่อง');
+                await movePlayer(1);
+            } else {
+                playSound('wrong');
+                log('ตอบผิด! ถอยหลัง 1 ช่อง');
+                await movePlayer(-1);
+            }
+
+            if(gameState.awaitingAction) endTurn(); // Ensure turn ends if movePlayer didn't trigger another event (which it shouldn't here)
+        }
+
+        async function closeModal() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.add('hidden');
+            document.getElementById('modal-overlay').classList.add('hidden');
+            
+            const move = parseInt(modal.dataset.pendingMove || "0");
+            modal.dataset.pendingMove = "0";
+
+            if (move !== 0) {
+                log(`ผลจากเหตุการณ์: ${move > 0 ? 'เดินหน้า' : 'ถอยหลัง'} ${Math.abs(move)} ช่อง`);
+                await movePlayer(move);
+            }
+            
+            if(gameState.awaitingAction) endTurn();
+        }
+
+        function endTurn() {
+            gameState.awaitingAction = false;
+            gameState.isRolling = false;
+            
+            // Check win again just in case
+            if (gameState.players[gameState.turn-1].pos >= 39) return;
+
+            // Switch turn
+            gameState.turn = gameState.turn === 1 ? 2 : 1;
+            updateTurnUI();
+        }
+
+        function aiTurn() {
+            if (gameState.turn !== 2 || gameState.mode !== 'ai' || gameState.isRolling) return;
+            rollDice();
+        }
+
+        function triggerGameOver(winner) {
+            playSound('win');
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            document.getElementById('info-modal').classList.add('hidden');
+            document.getElementById('question-modal').classList.add('hidden');
+            
+            document.getElementById('gameover-modal').classList.remove('hidden');
+            document.getElementById('winner-text').innerText = `${winner.name} เข้าเส้นชัยเป็นคนแรก!`;
+            
+            // Start fireworks/confetti effect via canvas? Opted for simple emoji animation via CSS
+        }
+
+    </script>
+</body>
+</html>

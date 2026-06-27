@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sukhothai Voxel Chronicles - เกมประวัติศาสตร์ ม.5</title>
+    
+    <!-- Google Fonts: พิมพ์ไทยให้อ่านง่ายและสวยงาม -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (CDN) สำหรับ UI ที่ทันสมัย -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js (CDN) สำหรับ 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Kanit', sans-serif;
+            background-color: #87CEEB; /* สีฟ้าท้องฟ้า */
+            user-select: none;
+        }
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        /* Glassmorphism UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+        }
+        .ui-layer {
+            position: absolute;
+            z-index: 10;
+        }
+        /* Animation สำหรับข้อความลอย */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas สำหรับ Three.js -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- UI: หน้าจอเริ่มเกม (Start Screen) -->
+    <div id="start-screen" class="ui-layer inset-0 flex items-center justify-center bg-black/60 transition-opacity duration-500">
+        <div class="glass-panel p-8 rounded-2xl max-w-2xl w-11/12 text-center">
+            <h1 class="text-4xl font-bold text-orange-600 mb-4">Sukhothai Voxel Chronicles</h1>
+            <h2 class="text-xl text-gray-700 mb-6">รุ่งอรุณแห่งความสุข - ประวัติศาสตร์ ม.5</h2>
+            <div class="text-left bg-orange-50 p-4 rounded-xl mb-6 text-gray-800 text-sm md:text-base border border-orange-200">
+                <p class="font-bold mb-2">📜 ภารกิจของคุณ:</p>
+                <p>สำรวจอาณาจักรสุโขทัยผ่านโลก 3D Voxel ค้นหาสถานที่สำคัญ 4 แห่ง และตัดสินใจเลือกนโยบายเพื่อวางรากฐานให้กับอาณาจักร!</p>
+                <ul class="list-disc ml-5 mt-2 text-sm text-gray-600">
+                    <li>ใช้ปุ่ม <kbd class="bg-gray-200 px-2 py-1 rounded">W</kbd> <kbd class="bg-gray-200 px-2 py-1 rounded">A</kbd> <kbd class="bg-gray-200 px-2 py-1 rounded">S</kbd> <kbd class="bg-gray-200 px-2 py-1 rounded">D</kbd> หรือ <kbd class="bg-gray-200 px-2 py-1 rounded">ลูกศร</kbd> หรือ <strong>คลิก/ลากเมาส์ที่พื้น</strong> เพื่อเดิน</li>
+                    <li>เดินเข้าไปที่จุดแสงสว่าง (Marker) เพื่อทำภารกิจ</li>
+                    <li>มีเวลาจำกัด 120 วินาที ตอบถูกได้คะแนนและเวลาเพิ่ม!</li>
+                </ul>
+            </div>
+            <button id="btn-start" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-full shadow-lg transform transition hover:scale-105 text-lg">
+                เริ่มการสำรวจ
+            </button>
+        </div>
+    </div>
+
+    <!-- UI: HUD (แสดงข้อมูลระหว่างเล่น) -->
+    <div id="hud" class="ui-layer top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none hidden">
+        <div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-4 pointer-events-auto">
+            <div>
+                <p class="text-xs text-gray-500 font-bold uppercase">เวลาที่เหลือ</p>
+                <p id="time-display" class="text-2xl font-bold text-blue-600">120s</p>
+            </div>
+            <div class="w-px h-8 bg-gray-300"></div>
+            <div>
+                <p class="text-xs text-gray-500 font-bold uppercase">คะแนน</p>
+                <p id="score-display" class="text-2xl font-bold text-orange-500">0</p>
+            </div>
+            <div class="w-px h-8 bg-gray-300"></div>
+            <div>
+                <p class="text-xs text-gray-500 font-bold uppercase">ภารกิจ</p>
+                <p id="mission-progress" class="text-lg font-bold text-green-600">0 / 4</p>
+            </div>
+        </div>
+        
+        <div class="flex gap-2 pointer-events-auto">
+            <button id="btn-help" class="bg-white/80 hover:bg-white text-blue-600 p-2 rounded-full shadow backdrop-blur" title="วิธีเล่น">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </button>
+            <button id="btn-reset" class="bg-white/80 hover:bg-white text-red-600 p-2 rounded-full shadow backdrop-blur" title="เริ่มใหม่">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- UI: หน้าต่างภารกิจ (Mission Modal) -->
+    <div id="mission-modal" class="ui-layer inset-0 flex items-center justify-center bg-black/40 hidden">
+        <div class="glass-panel p-6 rounded-2xl max-w-lg w-11/12 transform scale-95 transition-transform duration-300" id="mission-card">
+            <div class="flex items-center gap-3 mb-4">
+                <span id="mission-icon" class="text-3xl">🏛️</span>
+                <h2 id="mission-title" class="text-2xl font-bold text-gray-800">ชื่อภารกิจ</h2>
+            </div>
+            <p id="mission-desc" class="text-gray-600 mb-6 line-clamp-4">รายละเอียดภารกิจ...</p>
+            
+            <div id="mission-choices" class="flex flex-col gap-3">
+                <!-- ปุ่มตัวเลือกจะถูกสร้างด้วย JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- UI: หน้าต่าง Feedback ผลการตัดสินใจ -->
+    <div id="feedback-modal" class="ui-layer inset-0 flex items-center justify-center bg-black/40 hidden z-50">
+        <div class="bg-white p-6 rounded-2xl max-w-md w-11/12 text-center shadow-2xl border-t-8" id="feedback-card">
+            <h3 id="feedback-title" class="text-2xl font-bold mb-2">ยอดเยี่ยม!</h3>
+            <p id="feedback-desc" class="text-gray-600 mb-4">คำอธิบาย</p>
+            <div class="flex justify-center gap-4 mb-6 font-bold">
+                <span id="feedback-score" class="text-green-500 bg-green-50 px-3 py-1 rounded-full">+20 คะแนน</span>
+                <span id="feedback-time" class="text-blue-500 bg-blue-50 px-3 py-1 rounded-full">+10 วินาที</span>
+            </div>
+            <button id="btn-continue" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-full w-full font-bold transition">ดำเนินการต่อ</button>
+        </div>
+    </div>
+
+    <!-- UI: หน้าสรุปผล (Game Over / Victory) -->
+    <div id="end-screen" class="ui-layer inset-0 flex items-center justify-center bg-black/80 hidden z-50">
+        <div class="glass-panel p-8 rounded-2xl max-w-md w-11/12 text-center">
+            <h1 id="end-title" class="text-4xl font-bold text-white mb-2 drop-shadow-md">จบเกม!</h1>
+            <p id="end-subtitle" class="text-gray-200 mb-6">คุณได้เขียนประวัติศาสตร์หน้าใหม่</p>
+            
+            <div class="bg-white/20 p-4 rounded-xl mb-6 text-white border border-white/30">
+                <p class="text-sm uppercase tracking-wider mb-1">คะแนนรวมของคุณ</p>
+                <p id="end-score" class="text-5xl font-bold text-orange-400 drop-shadow">0</p>
+                <p class="text-sm mt-2" id="end-rank">ระดับ: ชาวบ้านทั่วไป</p>
+            </div>
+            
+            <button id="btn-restart" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-full shadow-lg w-full transform transition hover:scale-105">
+                เล่นอีกครั้ง
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript: ระบบเกมทั้งหมด -->
+    <script>
+        // --- การตั้งค่าตัวแปรหลัก ---
+        let scene, camera, renderer;
+        let player;
+        let playerGridPos = { x: 0, z: 0 }; // ตำแหน่งแบบ Grid (1 block = 1 unit)
+        let playerTargetPos = new THREE.Vector3(0, 1, 0); // ตำแหน่งที่กำลังเดินไปหา
+        const MAP_SIZE = 12; // ขนาดแผนที่ 24x24 (-12 ถึง 12)
+        const CUBE_SIZE = 1;
+        
+        // ตัวแปรสำหรับเมาส์/Touch
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let groundPlane;
+        let pointerActive = false;
+        let pointerTarget = new THREE.Vector3();
+
+        // ข้อมูลระบบเกม
+        let gameState = 'start'; // start, playing, paused, end
+        let score = 0;
+        let timeLeft = 120;
+        let missionsCompleted = 0;
+        let timerInterval;
+        let activeMissions = [];
+        let mapObjects = []; // เก็บกล่องที่เป็นสิ่งกีดขวาง
+
+        // ข้อมูลภารกิจ (อิงประวัติศาสตร์ ม.5)
+        const missionData = [
+            {
+                id: 'm1',
+                title: 'เศรษฐกิจ: เครื่องสังคโลก',
+                icon: '🏺',
+                pos: { x: -6, z: -6 },
+                color: 0x8B4513, // สีน้ำตาลเตาทุเรียง
+                desc: 'คุณค้นพบ "เตาทุเรียง" แหล่งผลิตเครื่องปั้นดินเผาสังคโลกคุณภาพสูง ในฐานะผู้นำ คุณจะจัดการกับสินค้านี้อย่างไรเพื่อให้เศรษฐกิจสุโขทัยรุ่งเรือง?',
+                choices: [
+                    { 
+                        text: 'ส่งออกไปขายต่างแคว้น เช่น จีนและมลายู', 
+                        score: 30, time: 10, correct: true,
+                        feedback: 'การส่งออกเครื่องสังคโลกเป็นสินค้าออกสำคัญที่สร้างรายได้มหาศาลให้สุโขทัย!'
+                    },
+                    { 
+                        text: 'เก็บไว้ใช้เฉพาะในราชสำนักสุโขทัยเท่านั้น', 
+                        score: 0, time: -10, correct: false,
+                        feedback: 'การปิดกั้นการค้าทำให้สูญเสียโอกาสทางเศรษฐกิจ สุโขทัยเติบโตได้ด้วยการค้าเสรี'
+                    }
+                ]
+            },
+            {
+                id: 'm2',
+                title: 'การปกครอง: กระดิ่งร้องทุกข์',
+                icon: '🔔',
+                pos: { x: 6, z: -4 },
+                color: 0xFFD700, // สีทองกระดิ่ง
+                desc: 'มีชาวบ้านมีเรื่องเดือดร้อนและมาสั่นกระดิ่งที่ประตูวัง ตามแนวทางการปกครองแบบสุโขทัยตอนต้น คุณจะทำอย่างไร?',
+                choices: [
+                    { 
+                        text: 'ให้ขุนนางระดับล่างไปตัดสินคดีแทน เพื่อประหยัดเวลา', 
+                        score: 5, time: -5, correct: false,
+                        feedback: 'แม้จะประหยัดเวลา แต่ไม่ตรงกับแนวคิด "พ่อปกครองลูก" ที่กษัตริย์ใกล้ชิดประชาชน'
+                    },
+                    { 
+                        text: 'ออกไปรับฟังปัญหาและตัดสินคดีความด้วยตนเอง', 
+                        score: 30, time: 10, correct: true,
+                        feedback: 'ถูกต้อง! นี่คือลักษณะของการปกครองแบบ "ปิตุราชา" (พ่อปกครองลูก) กษัตริย์ดูแลราษฎรอย่างใกล้ชิด'
+                    }
+                ]
+            },
+            {
+                id: 'm3',
+                title: 'ศาสนา: ศรัทธาแห่งอาณาจักร',
+                icon: '🙏',
+                pos: { x: -4, z: 6 },
+                color: 0xFF8C00, // สีส้มจีวร
+                desc: 'สุโขทัยต้องการศูนย์รวมจิตใจ คุณได้รับคำแนะนำให้เชิญพระสงฆ์จากนครศรีธรรมราชมาเผยแผ่ศาสนา คุณจะเลือกศาสนาใด?',
+                choices: [
+                    { 
+                        text: 'พระพุทธศาสนานิกายเถรวาท ลัทธิลังกาวงศ์', 
+                        score: 30, time: 10, correct: true,
+                        feedback: 'พุทธศาสนานิกายเถรวาท ลัทธิลังกาวงศ์ กลายเป็นศาสนาหลักที่สร้างความเป็นปึกแผ่นให้สุโขทัย'
+                    },
+                    { 
+                        text: 'ศาสนาพราหมณ์-ฮินดู อย่างเต็มรูปแบบ', 
+                        score: 10, time: -5, correct: false,
+                        feedback: 'แม้จะมีพราหมณ์-ฮินดูในราชสำนัก แต่พุทธศาสนาเถรวาทเป็นรากฐานหลักของสังคมสุโขทัย'
+                    }
+                ]
+            },
+            {
+                id: 'm4',
+                title: 'ภูมิปัญญา: การบันทึกเรื่องราว',
+                icon: '🪨',
+                pos: { x: 5, z: 5 },
+                color: 0x808080, // สีเทาศิลาจารึก
+                desc: 'เพื่อบันทึกเหตุการณ์และข้อกฎหมายให้ชนรุ่นหลังได้รับรู้ คุณจะใช้วิธีการใดในการบันทึก?',
+                choices: [
+                    { 
+                        text: 'ดัดแปลงอักษรขอมและมอญ ประดิษฐ์เป็น "ลายสือไทย"', 
+                        score: 40, time: 15, correct: true,
+                        feedback: 'ยอดเยี่ยม! พ่อขุนรามคำแหงทรงประดิษฐ์ลายสือไทยในปี พ.ศ. 1826 เป็นมรดกทางวัฒนธรรมที่สำคัญที่สุด'
+                    },
+                    { 
+                        text: 'ใช้อักษรขอมโบราณทั้งหมด เพราะขลังและศักดิ์สิทธิ์', 
+                        score: 10, time: -5, correct: false,
+                        feedback: 'ทำให้ประชาชนทั่วไปอ่านยาก การประดิษฐ์อักษรไทยช่วยสร้างเอกลักษณ์ของชาติได้ดีกว่า'
+                    }
+                ]
+            }
+        ];
+
+        let currentMissionIndex = -1;
+
+        // --- การตั้งค่า Three.js (Init) ---
+        function initThreeJS() {
+            const canvas = document.getElementById('game-canvas');
+            
+            // 1. Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // สีฟ้าสว่าง
+            scene.fog = new THREE.Fog(0x87CEEB, 15, 30); // หมอกบังขอบขอบ
+
+            // 2. Camera (จัดมุมมองแบบ Isometric-style)
+            const aspect = window.innerWidth / window.innerHeight;
+            // ใช้ Perspective Camera แต่จัดมุมสูงและเฉียง
+            camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+            camera.position.set(15, 15, 15);
+            camera.lookAt(0, 0, 0);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // เงานุ่ม
+
+            // 4. Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // แสงพื้นฐาน
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfff5e6, 0.8); // แสงแดดอุ่นๆ
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.left = -15;
+            dirLight.shadow.camera.right = 15;
+            dirLight.shadow.camera.top = 15;
+            dirLight.shadow.camera.bottom = -15;
+            scene.add(dirLight);
+
+            // 5. สร้างโลก (World Generation)
+            buildWorld();
+
+            // 6. สร้างผู้เล่น (Player)
+            buildPlayer();
+
+            // 7. จัดการ Resize
+            window.addEventListener('resize', onWindowResize);
+
+            // 8. เริ่ม Game Loop
+            animate();
+        }
+
+        // --- สร้างโลก Voxel ---
+        function buildWorld() {
+            // สร้างพื้นที่สำหรับรองรับการคลิกเมาส์ (Raycaster)
+            const planeGeo = new THREE.PlaneGeometry(100, 100);
+            planeGeo.rotateX(-Math.PI / 2);
+            const planeMat = new THREE.MeshBasicMaterial({ visible: false });
+            groundPlane = new THREE.Mesh(planeGeo, planeMat);
+            scene.add(groundPlane);
+
+            // Material ฐาน
+            const grassMat = new THREE.MeshLambertMaterial({ color: 0x7CFC00 }); // สีเขียวหญ้า
+            const dirtMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });  // สีดิน
+            const waterMat = new THREE.MeshLambertMaterial({ color: 0x1E90FF, transparent: true, opacity: 0.8 }); // น้ำ
+            const pathMat = new THREE.MeshLambertMaterial({ color: 0xDEB887 });  // ทางเดิน
+
+            const geo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+
+            // สร้างพื้นฐาน
+            for (let x = -MAP_SIZE; x <= MAP_SIZE; x++) {
+                for (let z = -MAP_SIZE; z <= MAP_SIZE; z++) {
+                    // กำหนดลักษณะพื้นที่ (ง่ายๆ ด้วยเงื่อนไข)
+                    let mat = grassMat;
+                    let yPos = 0;
+
+                    // สร้างสระน้ำตรงกลางซ้าย
+                    if (x > -9 && x < -3 && z > -2 && z < 4) {
+                        mat = waterMat;
+                        yPos = -0.2;
+                    } 
+                    // สร้างทางเดินกากบาทตรงกลาง
+                    else if ((x > -2 && x < 2) || (z > -2 && z < 2)) {
+                        mat = pathMat;
+                    }
+                    
+                    const block = new THREE.Mesh(geo, mat);
+                    block.position.set(x, yPos - 0.5, z); // วางใต้พื้นดินเล็กน้อยให้หน้าเรียบที่ y=0
+                    block.receiveShadow = true;
+                    scene.add(block);
+
+                    // เพิ่มสิ่งกีดขวาง (ต้นไม้/หิน) แบบสุ่มบริเวณขอบ
+                    if (yPos === 0 && Math.abs(x) > 2 && Math.abs(z) > 2 && Math.random() < 0.1) {
+                        createTree(x, 0.5, z);
+                        mapObjects.push({x: x, z: z}); // เก็บข้อมูลสิ่งกีดขวาง
+                    }
+                }
+            }
+
+            // สุ่มกำแพงเมืองเก่า
+            for(let i=0; i<10; i++){
+                let wx = Math.floor(Math.random() * 20) - 10;
+                let wz = Math.floor(Math.random() * 20) - 10;
+                if(Math.abs(wx) > 3 && Math.abs(wz) > 3) {
+                    createRuins(wx, 0.5, wz);
+                    mapObjects.push({x: wx, z: wz});
+                }
+            }
+        }
+
+        // สร้างต้นไม้ Voxel
+        function createTree(x, y, z) {
+            const trunkGeo = new THREE.BoxGeometry(0.4, 1, 0.4);
+            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5C4033 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.set(x, y, z);
+            trunk.castShadow = true;
+            
+            const leavesGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+            const leavesMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+            leaves.position.set(x, y + 1, z);
+            leaves.castShadow = true;
+
+            scene.add(trunk);
+            scene.add(leaves);
+        }
+
+        // สร้างซากโบราณสถาน (ศิลาแลง)
+        function createRuins(x, y, z) {
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const mat = new THREE.MeshLambertMaterial({ color: 0x8B0000 }); // สีแดงอิฐ/ศิลาแลง
+            const block = new THREE.Mesh(geo, mat);
+            block.position.set(x, y, z);
+            block.castShadow = true;
+            block.receiveShadow = true;
+            scene.add(block);
+        }
+
+        // --- สร้างตัวละคร (Player) ---
+        function buildPlayer() {
+            // สร้างกลุ่มเพื่อรวมชิ้นส่วนตัวละคร
+            player = new THREE.Group();
+            
+            // ลำตัว (ช้างน้อย สัญลักษณ์ไทย หรือคนง่ายๆ)
+            // ใช้บล็อกคนง่ายๆ (หัว + ตัว)
+            const bodyGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: 0x4169E1 }); // เสื้อสีน้ำเงิน
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.4;
+            body.castShadow = true;
+
+            const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+            const headMat = new THREE.MeshLambertMaterial({ color: 0xFFDAB9 }); // สีผิว
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.1;
+            head.castShadow = true;
+
+            player.add(body);
+            player.add(head);
+            
+            // ตั้งตำแหน่งเริ่มต้น
+            player.position.set(0, 0, 0);
+            scene.add(player);
+        }
+
+        // --- สร้างระบบภารกิจ (Mission Markers) ---
+        function setupMissions() {
+            activeMissions = [];
+            // ลบ Marker เก่าถ้ามี
+            scene.children.forEach(child => {
+                if(child.isMissionMarker) scene.remove(child);
+            });
+
+            missionData.forEach((data, index) => {
+                data.completed = false;
+                
+                // สร้าง Marker แบบ 3D (เพชรลอยได้)
+                const geo = new THREE.OctahedronGeometry(0.5);
+                const mat = new THREE.MeshLambertMaterial({ 
+                    color: data.color, 
+                    emissive: data.color,
+                    emissiveIntensity: 0.5,
+                    wireframe: false
+                });
+                const marker = new THREE.Mesh(geo, mat);
+                marker.position.set(data.pos.x, 1.5, data.pos.z);
+                marker.isMissionMarker = true;
+                marker.missionIndex = index;
+                
+                scene.add(marker);
+                activeMissions.push(marker);
+                
+                // ป้องกันไม่ให้เดินทับ Marker ทันที (กำหนดเป็นสิ่งกีดขวางแบบหลวมๆ)
+                // ไม่ต้องใส่ใน mapObjects เพราะอยากให้เดินชนเพื่อ Trigger
+            });
+        }
+
+        // --- การควบคุม (Input) ---
+        let isMoving = false;
+        
+        window.addEventListener('keydown', (e) => {
+            if (gameState !== 'playing' || isMoving) return;
+
+            let nx = playerGridPos.x;
+            let nz = playerGridPos.z;
+
+            // คุมทิศทาง อิงจากมุมกล้อง Isometric
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { nx -= 1; nz -= 1; }
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { nx += 1; nz += 1; }
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { nx -= 1; nz += 1; }
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { nx += 1; nz -= 1; }
+
+            // ตรวจสอบขอบเขต (Boundary)
+            if (Math.abs(nx) > MAP_SIZE || Math.abs(nz) > MAP_SIZE) return;
+
+            // ตรวจสอบสิ่งกีดขวาง (Collision)
+            let hitObstacle = mapObjects.some(obj => obj.x === nx && obj.z === nz);
+            if(hitObstacle) return;
+
+            // ยืนยันการเดิน
+            playerGridPos.x = nx;
+            playerGridPos.z = nz;
+            playerTargetPos.set(nx, 0, nz);
+            isMoving = true;
+
+            // หันหน้าตัวละคร
+            player.lookAt(playerTargetPos.x, player.position.y, playerTargetPos.z);
+        });
+
+        // --- ระบบควบคุมด้วยเมาส์ (Pointer Events) ---
+        window.addEventListener('pointerdown', (e) => {
+            if (e.target.id !== 'game-canvas' || gameState !== 'playing') return;
+            pointerActive = true;
+            updatePointerTarget(e);
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!pointerActive) return;
+            updatePointerTarget(e);
+        });
+
+        window.addEventListener('pointerup', () => {
+            pointerActive = false;
+        });
+
+        function updatePointerTarget(e) {
+            // แปลงพิกัดเมาส์ให้อยู่ในระบบ 3D
+            pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObject(groundPlane);
+
+            if (intersects.length > 0) {
+                pointerTarget.copy(intersects[0].point);
+            }
+        }
+
+        // --- Game Loop (Update) ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (gameState === 'playing') {
+                // ทำให้ Marker หมุนและเด้งขึ้นลง
+                const time = clock.getElapsedTime();
+                activeMissions.forEach(marker => {
+                    marker.rotation.y += 0.05;
+                    marker.position.y = 1.2 + Math.sin(time * 3 + marker.missionIndex) * 0.2;
+                });
+
+                // การเคลื่อนที่ของตัวละคร (Lerp เพื่อความนุ่มนวล)
+                if (isMoving) {
+                    player.position.lerp(playerTargetPos, 0.2); // เดินสมูท
+                    
+                    // ให้กล้องตามผู้เล่น
+                    camera.position.x = player.position.x + 15;
+                    camera.position.z = player.position.z + 15;
+
+                    // เช็คว่าถึงเป้าหมายหรือยัง (ระยะห่างน้อยมาก)
+                    if (player.position.distanceTo(playerTargetPos) < 0.05) {
+                        player.position.copy(playerTargetPos); // จัดให้ตรงเป๊ะ
+                        isMoving = false;
+                        checkMissionTrigger();
+                    }
+                } else if (pointerActive) {
+                    // หากยังไม่ได้ขยับและผู้เล่นกดเมาส์ค้างไว้ ให้คำนวณทิศทางเดิน
+                    const dx = pointerTarget.x - player.position.x;
+                    const dz = pointerTarget.z - player.position.z;
+
+                    // ป้องกันการเดินซ้ำที่เดิมเมื่อคลิกใกล้ตัวเกินไป (Deadzone)
+                    if (Math.abs(dx) > 0.5 || Math.abs(dz) > 0.5) {
+                        let nx = playerGridPos.x;
+                        let nz = playerGridPos.z;
+
+                        // เดินไปในแกนที่มีระยะห่างมากที่สุด
+                        if (Math.abs(dx) > Math.abs(dz)) {
+                            nx += dx > 0 ? 1 : -1;
+                        } else {
+                            nz += dz > 0 ? 1 : -1;
+                        }
+
+                        // ตรวจสอบขอบเขต (Boundary)
+                        if (Math.abs(nx) <= MAP_SIZE && Math.abs(nz) <= MAP_SIZE) {
+                            let hitObstacle = mapObjects.some(obj => obj.x === nx && obj.z === nz);
+                            
+                            // หากติดสิ่งกีดขวางในแกนหลัก ลองเดินเลี่ยงในแกนรอง (ช่วยให้แถบเดินแนบกำแพงได้)
+                            if (hitObstacle) {
+                                nx = playerGridPos.x;
+                                nz = playerGridPos.z;
+                                if (Math.abs(dx) > Math.abs(dz)) {
+                                    nz += dz > 0 ? 1 : -1;
+                                } else {
+                                    nx += dx > 0 ? 1 : -1;
+                                }
+                                hitObstacle = mapObjects.some(obj => obj.x === nx && obj.z === nz);
+                            }
+
+                            // ถ้ายืนยันว่าไม่มีสิ่งกีดขวาง สั่งเดินได้เลย
+                            if (!hitObstacle && Math.abs(nx) <= MAP_SIZE && Math.abs(nz) <= MAP_SIZE) {
+                                playerGridPos.x = nx;
+                                playerGridPos.z = nz;
+                                playerTargetPos.set(nx, 0, nz);
+                                isMoving = true;
+                                player.lookAt(playerTargetPos.x, player.position.y, playerTargetPos.z);
+                            }
+                        }
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function checkMissionTrigger() {
+            activeMissions.forEach((marker) => {
+                const mission = missionData[marker.missionIndex];
+                if (!mission.completed) {
+                    // ถ้ายืนอยู่ตำแหน่งเดียวกับ Marker
+                    if (playerGridPos.x === mission.pos.x && playerGridPos.z === mission.pos.z) {
+                        triggerMission(marker.missionIndex);
+                    }
+                }
+            });
+        }
+
+        // --- ระบบ UI และ Game Logic ---
+        
+        // ตัวแปร DOM
+        const uiStart = document.getElementById('start-screen');
+        const uiHud = document.getElementById('hud');
+        const uiMission = document.getElementById('mission-modal');
+        const uiFeedback = document.getElementById('feedback-modal');
+        const uiEnd = document.getElementById('end-screen');
+
+        document.getElementById('btn-start').addEventListener('click', startGame);
+        document.getElementById('btn-reset').addEventListener('click', resetGame);
+        document.getElementById('btn-restart').addEventListener('click', resetGame);
+        document.getElementById('btn-help').addEventListener('click', () => {
+            uiStart.classList.remove('hidden');
+            uiStart.classList.remove('opacity-0');
+            gameState = 'paused';
+        });
+
+        function startGame() {
+            uiStart.classList.add('opacity-0');
+            setTimeout(() => {
+                uiStart.classList.add('hidden');
+                uiHud.classList.remove('hidden');
+                resetStats();
+                setupMissions();
+                gameState = 'playing';
+                startTimer();
+            }, 500);
+        }
+
+        function resetGame() {
+            uiEnd.classList.add('hidden');
+            uiMission.classList.add('hidden');
+            uiFeedback.classList.add('hidden');
+            
+            // รีเซ็ตตำแหน่งผู้เล่น
+            playerGridPos = { x: 0, z: 0 };
+            playerTargetPos.set(0, 0, 0);
+            player.position.set(0, 0, 0);
+            camera.position.set(15, 15, 15);
+            
+            startGame();
+        }
+
+        function resetStats() {
+            score = 0;
+            timeLeft = 120;
+            missionsCompleted = 0;
+            updateHUD();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (gameState === 'playing') {
+                    timeLeft--;
+                    updateHUD();
+                    if (timeLeft <= 0) {
+                        endGame(false);
+                    }
+                }
+            }, 1000);
+        }
+
+        function updateHUD() {
+            document.getElementById('time-display').innerText = timeLeft + 's';
+            // เปลี่ยนสีเวลาเมื่อเหลือน้อย
+            if(timeLeft <= 30) document.getElementById('time-display').className = 'text-2xl font-bold text-red-600 animate-pulse';
+            else document.getElementById('time-display').className = 'text-2xl font-bold text-blue-600';
+            
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('mission-progress').innerText = `${missionsCompleted} / 4`;
+        }
+
+        function triggerMission(index) {
+            gameState = 'paused';
+            currentMissionIndex = index;
+            const mission = missionData[index];
+
+            document.getElementById('mission-icon').innerText = mission.icon;
+            document.getElementById('mission-title').innerText = mission.title;
+            document.getElementById('mission-desc').innerText = mission.desc;
+
+            const choicesContainer = document.getElementById('mission-choices');
+            choicesContainer.innerHTML = ''; // เคลียร์ของเก่า
+
+            mission.choices.forEach((choice, choiceIndex) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left bg-white hover:bg-orange-50 border-2 border-gray-200 hover:border-orange-400 text-gray-800 p-4 rounded-xl transition duration-200 font-medium shadow-sm';
+                btn.innerText = choice.text;
+                btn.onclick = () => selectChoice(choiceIndex);
+                choicesContainer.appendChild(btn);
+            });
+
+            uiMission.classList.remove('hidden');
+        }
+
+        function selectChoice(choiceIndex) {
+            uiMission.classList.add('hidden');
+            const mission = missionData[currentMissionIndex];
+            const choice = mission.choices[choiceIndex];
+
+            // อัปเดตข้อมูล
+            score += choice.score;
+            timeLeft += choice.time;
+            mission.completed = true;
+            missionsCompleted++;
+
+            // ซ่อน Marker ใน 3D
+            const markerToHide = activeMissions.find(m => m.missionIndex === currentMissionIndex);
+            if (markerToHide) markerToHide.visible = false;
+
+            // แสดง Feedback
+            uiFeedback.classList.remove('hidden');
+            
+            const fbCard = document.getElementById('feedback-card');
+            const fbTitle = document.getElementById('feedback-title');
+            const fbDesc = document.getElementById('feedback-desc');
+            const fbScore = document.getElementById('feedback-score');
+            const fbTime = document.getElementById('feedback-time');
+
+            fbDesc.innerText = choice.feedback;
+            
+            if (choice.correct) {
+                fbCard.className = 'bg-white p-6 rounded-2xl max-w-md w-11/12 text-center shadow-2xl border-t-8 border-green-500';
+                fbTitle.innerText = 'เยี่ยมมาก! การตัดสินใจที่ชาญฉลาด';
+                fbTitle.className = 'text-2xl font-bold mb-2 text-green-600';
+                fbScore.innerText = `+${choice.score} คะแนน`;
+                fbScore.className = 'text-green-600 bg-green-100 px-3 py-1 rounded-full';
+                fbTime.innerText = `+${choice.time} วินาที`;
+                fbTime.className = 'text-blue-600 bg-blue-100 px-3 py-1 rounded-full';
+            } else {
+                fbCard.className = 'bg-white p-6 rounded-2xl max-w-md w-11/12 text-center shadow-2xl border-t-8 border-orange-500';
+                fbTitle.innerText = 'ยังไม่เหมาะสมนัก...';
+                fbTitle.className = 'text-2xl font-bold mb-2 text-orange-600';
+                fbScore.innerText = `+${choice.score} คะแนน`;
+                fbScore.className = 'text-orange-600 bg-orange-100 px-3 py-1 rounded-full';
+                fbTime.innerText = `${choice.time} วินาที`; // ค่าติดลบอยู่แล้ว
+                fbTime.className = 'text-red-600 bg-red-100 px-3 py-1 rounded-full';
+            }
+
+            updateHUD();
+        }
+
+        document.getElementById('btn-continue').addEventListener('click', () => {
+            uiFeedback.classList.add('hidden');
+            
+            if (missionsCompleted >= 4) {
+                endGame(true);
+            } else {
+                gameState = 'playing';
+            }
+        });
+
+        function endGame(isVictory) {
+            clearInterval(timerInterval);
+            gameState = 'end';
+            uiHud.classList.add('hidden');
+            uiEnd.classList.remove('hidden');
+
+            const title = document.getElementById('end-title');
+            const subtitle = document.getElementById('end-subtitle');
+            const scoreDisp = document.getElementById('end-score');
+            const rankDisp = document.getElementById('end-rank');
+
+            scoreDisp.innerText = score;
+
+            if (isVictory) {
+                title.innerText = 'ภารกิจสำเร็จ!';
+                title.className = 'text-5xl font-bold text-yellow-400 mb-2 drop-shadow-md';
+                subtitle.innerText = 'คุณได้วางรากฐานอันมั่นคงให้อาณาจักรสุโขทัย';
+                
+                // คำนวณระดับ (Rank)
+                if (score >= 120) rankDisp.innerText = 'ระดับ: มหาราชผู้ทรงธรรม 👑';
+                else if (score >= 80) rankDisp.innerText = 'ระดับ: ขุนนางชั้นผู้ใหญ่ 📜';
+                else rankDisp.innerText = 'ระดับ: ผู้ตรวจการแผ่นดิน 👁️';
+                
+            } else {
+                title.innerText = 'หมดเวลา!';
+                title.className = 'text-5xl font-bold text-red-500 mb-2 drop-shadow-md';
+                subtitle.innerText = 'การบริหารอาณาจักรต้องแข่งกับเวลา... ลองใหม่อีกครั้ง';
+                rankDisp.innerText = 'ระดับ: ผู้เรียนรู้ประวัติศาสตร์';
+            }
+        }
+
+        // จัดการหน้าจอเมื่อ Resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // เริ่มโหลดเกม
+        window.onload = initThreeJS;
+
+    </script>
+</body>
+</html>

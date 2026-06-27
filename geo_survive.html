@@ -7,13 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Prompt', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        body { font-family: 'Prompt', sans-serif; background-color: #0f172a; color: #f8fafc; overflow: hidden; }
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .board-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; position: relative; }
-        @media (max-width: 640px) { .board-grid { gap: 0.25rem; } }
+        .board-grid { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(6, 1fr); gap: 0.25rem; position: relative; height: 100%; width: 100%; }
         
         .tile { 
-            aspect-ratio: 1; 
             border-radius: 0.5rem; 
             display: flex; 
             flex-direction: column;
@@ -22,8 +20,12 @@
             position: relative;
             transition: all 0.3s ease;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-            font-size: 1.25rem;
+            font-size: clamp(0.7rem, 2vh, 1.25rem);
             font-weight: bold;
+            height: 100%;
+            width: 100%;
+            text-align: center;
+            line-height: 1.2;
         }
         .tile-safe { background: linear-gradient(145deg, #334155, #1e293b); color: #94a3b8; }
         .tile-event { background: linear-gradient(145deg, #991b1b, #7f1d1d); color: #fca5a5; border: 2px solid #ef4444;}
@@ -79,7 +81,7 @@
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col p-2 md:p-6">
+<body class="h-screen w-screen overflow-hidden flex flex-col p-2 md:p-4 box-border">
 
     <script>
         // --- Audio System (Synthetic Sounds for Dice & Events) ---
@@ -172,79 +174,79 @@
     </script>
 
     <!-- Header -->
-    <header class="text-center mb-4">
-        <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">GeoSurvive</h1>
-        <p class="text-gray-400 text-sm md:text-base">สมรภูมิภัยธรรมชาติ - บอร์ดเกมการศึกษา</p>
+    <header class="text-center mb-2 shrink-0">
+        <h1 class="text-2xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">GeoSurvive</h1>
+        <p class="text-gray-400 text-xs md:text-sm">สมรภูมิภัยธรรมชาติ - บอร์ดเกมการศึกษา</p>
     </header>
 
     <!-- Setup Screen -->
-    <div id="setup-screen" class="glass-panel flex-1 flex flex-col items-center justify-center rounded-2xl p-6 mx-auto w-full max-w-md">
-        <h2 class="text-2xl mb-6 font-semibold">เลือกโหมดการเล่น</h2>
-        <button onclick="startGame('pve')" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl mb-4 text-xl font-bold transition transform hover:scale-105">👤 เล่นคนเดียว (แข่งกับ AI)</button>
-        <button onclick="startGame('pvp')" class="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl mb-4 text-xl font-bold transition transform hover:scale-105">👥 เล่น 2 คน (สลับกันทอย)</button>
-        <div class="mt-4 text-gray-300 text-sm text-center">
+    <div id="setup-screen" class="glass-panel flex-1 flex flex-col items-center justify-center rounded-2xl p-6 mx-auto w-full max-w-md min-h-0">
+        <h2 class="text-xl md:text-2xl mb-4 font-semibold">เลือกโหมดการเล่น</h2>
+        <button onclick="startGame('pve')" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 md:py-4 rounded-xl mb-4 text-lg font-bold transition transform hover:scale-105">👤 เล่นคนเดียว (แข่งกับ AI)</button>
+        <button onclick="startGame('pvp')" class="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 md:py-4 rounded-xl mb-4 text-lg font-bold transition transform hover:scale-105">👥 เล่น 2 คน (สลับกันทอย)</button>
+        <div class="mt-2 text-gray-300 text-xs md:text-sm text-center">
             <p>🔴 สีแดง = ภัยธรรมชาติ (ลด HP)</p>
             <p>🔵 สีฟ้า = คำถาม (ตอบถูกได้โล่/ฟื้น HP)</p>
-            <p>🏁 เป้าหมาย = เอาตัวรอดให้ถึงช่อง 25!</p>
+            <p>🏁 เป้าหมาย = เอาตัวรอดให้ถึงช่องสุดท้าย!</p>
         </div>
     </div>
 
     <!-- Main Game UI (Hidden initially) -->
-    <div id="game-ui" class="hidden flex-col flex-1 max-w-5xl mx-auto w-full">
+    <div id="game-ui" class="hidden flex-col flex-1 min-h-0 max-w-5xl mx-auto w-full gap-2 md:gap-3">
         
         <!-- Status Bars -->
-        <div class="flex justify-between gap-4 mb-4">
+        <div class="flex justify-between gap-2 md:gap-4 shrink-0">
             <!-- Player 1 Status -->
-            <div id="status-p1" class="glass-panel flex-1 rounded-xl p-3 border-l-4 border-blue-500 transition-all">
+            <div id="status-p1" class="glass-panel flex-1 rounded-xl p-2 md:p-3 border-l-4 border-blue-500 transition-all">
                 <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-blue-400">ผู้เล่น 1 (สีน้ำเงิน)</span>
-                    <span class="bg-blue-900/50 px-2 py-1 rounded text-xs">ช่อง <span id="pos-p1">1</span></span>
+                    <span class="font-bold text-blue-400 text-xs md:text-base">ผู้เล่น 1 (น้ำเงิน)</span>
+                    <span class="bg-blue-900/50 px-2 py-0.5 rounded text-[10px] md:text-xs">ช่อง <span id="pos-p1">1</span></span>
                 </div>
-                <div class="w-full bg-gray-700 rounded-full h-3 mb-1">
-                    <div id="hp-bar-p1" class="bg-green-500 h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
+                <div class="w-full bg-gray-700 rounded-full h-2 md:h-3 mb-1">
+                    <div id="hp-bar-p1" class="bg-green-500 h-2 md:h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
                 </div>
-                <div class="flex justify-between text-sm">
+                <div class="flex justify-between text-xs md:text-sm">
                     <span>HP: <span id="hp-txt-p1">100</span></span>
-                    <span>🛡️ โล่: <span id="shield-p1">0</span></span>
+                    <span>🛡️ <span id="shield-p1">0</span></span>
                 </div>
             </div>
 
             <!-- Player 2 / AI Status -->
-            <div id="status-p2" class="glass-panel flex-1 rounded-xl p-3 border-l-4 border-gray-600 opacity-50 transition-all">
+            <div id="status-p2" class="glass-panel flex-1 rounded-xl p-2 md:p-3 border-l-4 border-gray-600 opacity-50 transition-all">
                 <div class="flex justify-between items-center mb-1">
-                    <span id="name-p2" class="font-bold text-orange-400">AI (สีส้ม)</span>
-                    <span class="bg-orange-900/50 px-2 py-1 rounded text-xs">ช่อง <span id="pos-p2">1</span></span>
+                    <span id="name-p2" class="font-bold text-orange-400 text-xs md:text-base">AI (ส้ม)</span>
+                    <span class="bg-orange-900/50 px-2 py-0.5 rounded text-[10px] md:text-xs">ช่อง <span id="pos-p2">1</span></span>
                 </div>
-                <div class="w-full bg-gray-700 rounded-full h-3 mb-1">
-                    <div id="hp-bar-p2" class="bg-green-500 h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
+                <div class="w-full bg-gray-700 rounded-full h-2 md:h-3 mb-1">
+                    <div id="hp-bar-p2" class="bg-green-500 h-2 md:h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
                 </div>
-                <div class="flex justify-between text-sm">
+                <div class="flex justify-between text-xs md:text-sm">
                     <span>HP: <span id="hp-txt-p2">100</span></span>
-                    <span>🛡️ โล่: <span id="shield-p2">0</span></span>
+                    <span>🛡️ <span id="shield-p2">0</span></span>
                 </div>
             </div>
         </div>
 
         <!-- The Board -->
-        <div class="glass-panel rounded-2xl p-4 flex-1 mb-4 flex flex-col justify-center relative">
+        <div class="glass-panel rounded-xl md:rounded-2xl p-2 flex-1 min-h-0 flex flex-col relative overflow-hidden">
             <div id="board" class="board-grid">
                 <!-- Tiles injected by JS -->
             </div>
         </div>
 
         <!-- Control Area -->
-        <div class="glass-panel rounded-2xl p-4 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <div class="dice-container">
+        <div class="glass-panel rounded-xl md:rounded-2xl p-2 md:p-3 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3 md:gap-4">
+                <div class="dice-container scale-75 md:scale-100 origin-left">
                     <div id="dice" class="dice">1</div>
                 </div>
                 <div>
-                    <h3 id="turn-indicator" class="text-xl font-bold text-blue-400">ตาของผู้เล่น 1</h3>
-                    <p id="action-log" class="text-sm text-gray-400">กดปุ่มเพื่อทอยลูกเต๋า</p>
+                    <h3 id="turn-indicator" class="text-sm md:text-xl font-bold text-blue-400">ตาของผู้เล่น 1</h3>
+                    <p id="action-log" class="text-xs md:text-sm text-gray-400">กดปุ่มเพื่อทอยลูกเต๋า</p>
                 </div>
             </div>
-            <button id="btn-roll" onclick="handleRoll()" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg transform transition hover:scale-105 disabled:opacity-50 disabled:scale-100">
-                🎲 ทอยลูกเต๋า
+            <button id="btn-roll" onclick="handleRoll()" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-4 md:px-8 py-2 md:py-3 rounded-xl font-bold text-sm md:text-lg shadow-lg transform transition hover:scale-105 disabled:opacity-50 disabled:scale-100">
+                🎲 ทอย
             </button>
         </div>
     </div>
@@ -300,8 +302,9 @@
             const boardEl = document.getElementById('board');
             boardEl.innerHTML = '';
             
-            // ปรับ Grid สำหรับ 30 ช่อง (6 แถว x 5 คอลัมน์) จะทำให้ดูพอดีขึ้น
+            // บังคับ Grid Layout 5 คอลัมน์ x 6 แถว เสมอ เพื่อให้ฟิตกับหน้าจอ
             boardEl.style.gridTemplateColumns = 'repeat(5, 1fr)';
+            boardEl.style.gridTemplateRows = 'repeat(6, 1fr)';
 
             for (let i = 0; i < TOTAL_TILES; i++) {
                 const type = boardMap[i];

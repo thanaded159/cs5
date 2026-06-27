@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoSurvive: สมรภูมิภัยธรรมชาติ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .board-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; position: relative; }
+        @media (max-width: 640px) { .board-grid { gap: 0.25rem; } }
+        
+        .tile { 
+            aspect-ratio: 1; 
+            border-radius: 0.5rem; 
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+        .tile-safe { background: linear-gradient(145deg, #334155, #1e293b); color: #94a3b8; }
+        .tile-event { background: linear-gradient(145deg, #991b1b, #7f1d1d); color: #fca5a5; border: 2px solid #ef4444;}
+        .tile-question { background: linear-gradient(145deg, #1d4ed8, #1e3a8a); color: #93c5fd; border: 2px solid #3b82f6;}
+        .tile-finish { background: linear-gradient(145deg, #166534, #14532d); color: #86efac; border: 2px solid #22c55e;}
+        
+        .avatar {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            position: absolute;
+            top: 0; left: 0;
+            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 10;
+            border: 2px solid white;
+        }
+        .avatar-p1 { background-color: #3b82f6; } /* Blue */
+        .avatar-p2 { background-color: #f97316; } /* Orange */
+
+        .dice-container { perspective: 1000px; }
+        .dice {
+            width: 60px; height: 60px;
+            background: white; color: black;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; font-weight: bold;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.2), 0 5px 15px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        .rolling { animation: shake 0.4s infinite; }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            25% { transform: translate(-3px, 0px) rotate(5deg); }
+            50% { transform: translate(1px, -2px) rotate(-5deg); }
+            75% { transform: translate(-1px, 2px) rotate(2deg); }
+            100% { transform: translate(1px, -2px) rotate(-2deg); }
+        }
+        
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content { transform: scale(0.8); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+
+        /* Hide scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-2 md:p-6">
+
+    <script>
+        // --- Audio System (Synthetic Sounds for Dice & Events) ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            
+            if (type === 'dice') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'hurt') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.setValueAtTime(800, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+        }
+
+        // --- Game Data ---
+        const TOTAL_TILES = 30; // ขยายกระดานเป็น 30 ช่อง
+        // Tile types: 0=Safe, 1=Event(Danger), 2=Question
+        const boardMap = [
+            0, 0, 2, 0, 1, 2, 0, 1, 2, 0, 
+            0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 
+            1, 2, 0, 1, 2, 0, 1, 2, 0, 0 
+        ]; // ช่องที่ 30 คือเส้นชัย
+
+        // คำถามภูมิศาสตร์ ม.5
+        const questions = [
+            { q: "สัญญาณเตือนทางธรรมชาติที่ชัดเจนที่สุดก่อนเกิดสึนามิคือข้อใด?", options: ["ระดับน้ำทะเลลดลงอย่างรวดเร็ว", "เกิดพายุฝนฟ้าคะนอง", "ท้องฟ้าเปลี่ยนเป็นสีแดง", "แผ่นดินไหวขนาด 3.0"], a: 0 },
+            { q: "\"วงแหวนแห่งไฟ (Ring of Fire)\" ตั้งอยู่ล้อมรอบมหาสมุทรใด?", options: ["แอตแลนติก", "แปซิฟิก", "อินเดีย", "อาร์กติก"], a: 1 },
+            { q: "ข้อใดไม่ใช่ปัจจัยหลักที่ทำให้เกิดดินถล่มบริเวณที่ลาดชัน?", options: ["ฝนตกหนักต่อเนื่อง", "การตัดไม้ทำลายป่า", "ลักษณะหินผุพัง", "ความกดอากาศสูง"], a: 3 },
+            { q: "มาตราใดที่ใช้บอก \"ระดับความรุนแรง\" (ความเสียหาย) ของแผ่นดินไหว?", options: ["ริกเตอร์", "เมอร์คัลลี", "ฟูจิตะ", "ซัฟเฟอร์-ซิมป์สัน"], a: 1 },
+            { q: "ปรากฏการณ์ใดที่ทำให้ภูมิภาคอาเซียนแห้งแล้งและเสี่ยงไฟป่ามากกว่าปกติ?", options: ["ลานีญา", "เอลนีโญ", "ปรากฏการณ์เรือนกระจก", "ลมมรสุมตะวันตกเฉียงใต้"], a: 1 },
+            { q: "รอยเลื่อนที่มีพลัง (Active Fault) ในประเทศไทย ส่วนใหญ่อยู่ภาคใด?", options: ["ภาคอีสาน", "ภาคกลาง", "ภาคเหนือและตะวันตก", "ภาคใต้ฝั่งตะวันออก"], a: 2 },
+            { q: "พายุหมุนเขตร้อนที่เกิดในมหาสมุทรอินเดีย เรียกว่าอะไร?", options: ["ไต้ฝุ่น", "เฮอริเคน", "ไซโคลน", "วิลลี-วิลลี"], a: 2 },
+            { q: "หลุมยุบ (Sinkhole) มักเกิดในพื้นที่ที่มีโครงสร้างหินชนิดใด?", options: ["หินแกรนิต", "หินบะซอลต์", "หินปูน", "หินทราย"], a: 2 }
+        ];
+
+        // เหตุการณ์ภัยธรรมชาติ
+        const events = [
+            { text: "แผ่นดินไหว 7.5 แมกนิจูด! อาคารพังถล่ม", dmg: 25 },
+            { text: "คลื่นสึนามิซัดฝั่ง! มวลน้ำมหาศาลกวาดล้างชายฝั่ง", dmg: 35 },
+            { text: "พายุไต้ฝุ่นเข้า! ต้นไม้ล้มทับเส้นทางอพยพ", dmg: 15 },
+            { text: "โคลนถล่ม! ดินสไลด์ตัดขาดเส้นทาง", dmg: 25 },
+            { text: "ไฟป่าลุกลาม! ควันพิษ PM 2.5 หนาแน่น", dmg: 15 },
+            { text: "น้ำป่าไหลหลากฉับพลัน! กระแสน้ำเชี่ยวกราก", dmg: 30 },
+            { text: "ภูเขาไฟปะทุ! เถ้าภูเขาไฟปกคลุมท้องฟ้า", dmg: 20 }
+        ];
+
+        let state = {
+            mode: 'pve', // 'pvp' or 'pve' (Player vs Environment/AI)
+            turn: 0, // 0 for P1, 1 for P2/AI
+            players: [
+                { id: 'p1', name: 'ผู้เล่น 1', pos: 0, hp: 100, shield: 0 },
+                { id: 'p2', name: 'AI / ผู้เล่น 2', pos: 0, hp: 100, shield: 0 }
+            ],
+            gameActive: false,
+            awaitingAction: false
+        };
+    </script>
+
+    <!-- Header -->
+    <header class="text-center mb-4">
+        <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">GeoSurvive</h1>
+        <p class="text-gray-400 text-sm md:text-base">สมรภูมิภัยธรรมชาติ - บอร์ดเกมการศึกษา</p>
+    </header>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="glass-panel flex-1 flex flex-col items-center justify-center rounded-2xl p-6 mx-auto w-full max-w-md">
+        <h2 class="text-2xl mb-6 font-semibold">เลือกโหมดการเล่น</h2>
+        <button onclick="startGame('pve')" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl mb-4 text-xl font-bold transition transform hover:scale-105">👤 เล่นคนเดียว (แข่งกับ AI)</button>
+        <button onclick="startGame('pvp')" class="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl mb-4 text-xl font-bold transition transform hover:scale-105">👥 เล่น 2 คน (สลับกันทอย)</button>
+        <div class="mt-4 text-gray-300 text-sm text-center">
+            <p>🔴 สีแดง = ภัยธรรมชาติ (ลด HP)</p>
+            <p>🔵 สีฟ้า = คำถาม (ตอบถูกได้โล่/ฟื้น HP)</p>
+            <p>🏁 เป้าหมาย = เอาตัวรอดให้ถึงช่อง 25!</p>
+        </div>
+    </div>
+
+    <!-- Main Game UI (Hidden initially) -->
+    <div id="game-ui" class="hidden flex-col flex-1 max-w-5xl mx-auto w-full">
+        
+        <!-- Status Bars -->
+        <div class="flex justify-between gap-4 mb-4">
+            <!-- Player 1 Status -->
+            <div id="status-p1" class="glass-panel flex-1 rounded-xl p-3 border-l-4 border-blue-500 transition-all">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-blue-400">ผู้เล่น 1 (สีน้ำเงิน)</span>
+                    <span class="bg-blue-900/50 px-2 py-1 rounded text-xs">ช่อง <span id="pos-p1">1</span></span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-3 mb-1">
+                    <div id="hp-bar-p1" class="bg-green-500 h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span>HP: <span id="hp-txt-p1">100</span></span>
+                    <span>🛡️ โล่: <span id="shield-p1">0</span></span>
+                </div>
+            </div>
+
+            <!-- Player 2 / AI Status -->
+            <div id="status-p2" class="glass-panel flex-1 rounded-xl p-3 border-l-4 border-gray-600 opacity-50 transition-all">
+                <div class="flex justify-between items-center mb-1">
+                    <span id="name-p2" class="font-bold text-orange-400">AI (สีส้ม)</span>
+                    <span class="bg-orange-900/50 px-2 py-1 rounded text-xs">ช่อง <span id="pos-p2">1</span></span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-3 mb-1">
+                    <div id="hp-bar-p2" class="bg-green-500 h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span>HP: <span id="hp-txt-p2">100</span></span>
+                    <span>🛡️ โล่: <span id="shield-p2">0</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- The Board -->
+        <div class="glass-panel rounded-2xl p-4 flex-1 mb-4 flex flex-col justify-center relative">
+            <div id="board" class="board-grid">
+                <!-- Tiles injected by JS -->
+            </div>
+        </div>
+
+        <!-- Control Area -->
+        <div class="glass-panel rounded-2xl p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="dice-container">
+                    <div id="dice" class="dice">1</div>
+                </div>
+                <div>
+                    <h3 id="turn-indicator" class="text-xl font-bold text-blue-400">ตาของผู้เล่น 1</h3>
+                    <p id="action-log" class="text-sm text-gray-400">กดปุ่มเพื่อทอยลูกเต๋า</p>
+                </div>
+            </div>
+            <button id="btn-roll" onclick="handleRoll()" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg transform transition hover:scale-105 disabled:opacity-50 disabled:scale-100">
+                🎲 ทอยลูกเต๋า
+            </button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Event Modal -->
+    <div id="modal-event" class="modal-overlay">
+        <div class="modal-content glass-panel p-6 rounded-2xl max-w-md w-full border-t-4 border-red-500 text-center">
+            <div class="text-4xl mb-2">⚠️</div>
+            <h2 class="text-2xl font-bold text-red-400 mb-2">ภัยธรรมชาติ!</h2>
+            <p id="event-desc" class="text-lg mb-4">แผ่นดินไหว 7.0 ริกเตอร์ (เสีย 20 HP)</p>
+            
+            <div id="shield-prompt" class="hidden bg-gray-800 p-4 rounded-xl mb-4">
+                <p class="mb-2">คุณมี โล่ป้องกัน 🛡️ จะใช้หรือไม่?</p>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="resolveEvent(true)" class="bg-blue-600 px-4 py-2 rounded hover:bg-blue-500">ใช้โล่ป้องกัน</button>
+                    <button onclick="resolveEvent(false)" class="bg-red-600 px-4 py-2 rounded hover:bg-red-500">ยอมรับความเสียหาย</button>
+                </div>
+            </div>
+            
+            <button id="btn-ack-event" onclick="resolveEvent(false)" class="bg-gray-700 w-full py-3 rounded-xl font-bold hover:bg-gray-600 mt-2">รับทราบ</button>
+        </div>
+    </div>
+
+    <!-- Question Modal -->
+    <div id="modal-question" class="modal-overlay">
+        <div class="modal-content glass-panel p-6 rounded-2xl max-w-lg w-full border-t-4 border-blue-500">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-blue-400">❓ ภารกิจความรู้</h2>
+                <span class="text-xs bg-blue-900 px-2 py-1 rounded">ตอบถูกรับ 🛡️ หรือ +20 HP</span>
+            </div>
+            <p id="q-text" class="text-lg mb-6 leading-relaxed">คำถามจะแสดงที่นี่?</p>
+            <div id="q-options" class="flex flex-col gap-3">
+                <!-- Options injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Result/End Modal -->
+    <div id="modal-result" class="modal-overlay">
+        <div class="modal-content glass-panel p-8 rounded-2xl max-w-md w-full text-center">
+            <h2 id="result-title" class="text-3xl font-bold mb-4">จบเกม!</h2>
+            <p id="result-desc" class="text-xl mb-6">ผู้เล่น 1 ชนะ</p>
+            <button onclick="location.reload()" class="bg-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-500">เล่นอีกครั้ง</button>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Core Functions ---
+        
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            
+            // ปรับ Grid สำหรับ 30 ช่อง (6 แถว x 5 คอลัมน์) จะทำให้ดูพอดีขึ้น
+            boardEl.style.gridTemplateColumns = 'repeat(5, 1fr)';
+
+            for (let i = 0; i < TOTAL_TILES; i++) {
+                const type = boardMap[i];
+                const tile = document.createElement('div');
+                tile.id = `tile-${i}`;
+                tile.className = 'tile text-xs sm:text-base';
+                
+                if (i === 0) {
+                    tile.classList.add('tile-safe');
+                    tile.innerHTML = 'START';
+                } else if (i === TOTAL_TILES - 1) {
+                    tile.classList.add('tile-finish');
+                    tile.innerHTML = '🏁 SAFE<br>ZONE';
+                } else {
+                    if (type === 0) { tile.classList.add('tile-safe'); tile.innerText = i + 1; }
+                    if (type === 1) { tile.classList.add('tile-event'); tile.innerHTML = `⚠️<br>${i+1}`; }
+                    if (type === 2) { tile.classList.add('tile-question'); tile.innerHTML = `❓<br>${i+1}`; }
+                }
+                
+                boardEl.appendChild(tile);
+            }
+
+            // Create Avatars
+            boardEl.innerHTML += `<div id="avatar-p1" class="avatar avatar-p1"></div>`;
+            boardEl.innerHTML += `<div id="avatar-p2" class="avatar avatar-p2"></div>`;
+            
+            // Initial positioning
+            setTimeout(updateAvatars, 100);
+        }
+
+        function updateAvatars() {
+            state.players.forEach((p, index) => {
+                const tile = document.getElementById(`tile-${p.pos}`);
+                const avatar = document.getElementById(`avatar-${p.id}`);
+                if (tile && avatar) {
+                    const rect = tile.getBoundingClientRect();
+                    const boardRect = document.getElementById('board').getBoundingClientRect();
+                    
+                    // หาจุดกึ่งกลางของช่องนั้นๆ เทียบกับกระดาน
+                    const centerX = (rect.left - boardRect.left) + (rect.width / 2);
+                    const centerY = (rect.top - boardRect.top) + (rect.height / 2);
+                    
+                    let top, left;
+                    // จัดตำแหน่งให้เยื้องออกจากจุดกึ่งกลางเล็กน้อยเพื่อไม่ให้ซ้อนทับกัน (ขนาด avatar คือ 24px หักลบ 12 เพื่อให้จุดศูนย์กลางตรงกัน)
+                    if(index === 0) {
+                        left = centerX - 12 - 10; // เยื้องซ้าย
+                        top = centerY - 12 - 10;  // เยื้องบน
+                    } else {
+                        left = centerX - 12 + 10; // เยื้องขวา
+                        top = centerY - 12 + 10;  // เยื้องล่าง
+                    }
+
+                    avatar.style.transform = `translate(${left}px, ${top}px)`;
+                }
+            });
+            updateStatusUI();
+        }
+
+        function updateStatusUI() {
+            state.players.forEach((p) => {
+                document.getElementById(`pos-${p.id}`).innerText = Math.min(p.pos + 1, 30);
+                document.getElementById(`hp-txt-${p.id}`).innerText = p.hp;
+                document.getElementById(`shield-${p.id}`).innerText = p.shield;
+                
+                const hpBar = document.getElementById(`hp-bar-${p.id}`);
+                const hpPercent = Math.max(0, p.hp);
+                hpBar.style.width = `${hpPercent}%`;
+                
+                if (p.hp > 50) hpBar.className = "bg-green-500 h-3 rounded-full transition-all duration-500";
+                else if (p.hp > 25) hpBar.className = "bg-yellow-500 h-3 rounded-full transition-all duration-500";
+                else hpBar.className = "bg-red-500 h-3 rounded-full transition-all duration-500";
+            });
+
+            // Highlight active player panel
+            document.getElementById('status-p1').classList.toggle('border-blue-500', state.turn === 0);
+            document.getElementById('status-p1').classList.toggle('opacity-50', state.turn !== 0);
+            
+            let p2Color = state.mode === 'pvp' ? 'border-orange-500' : 'border-purple-500';
+            document.getElementById('status-p2').classList.toggle(p2Color, state.turn === 1);
+            document.getElementById('status-p2').classList.toggle('opacity-50', state.turn !== 1);
+        }
+
+        function setLog(msg) {
+            document.getElementById('action-log').innerText = msg;
+        }
+
+        function startGame(mode) {
+            initAudio(); // Required to unlock AudioContext on first user interaction
+            state.mode = mode;
+            state.gameActive = true;
+            
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            document.getElementById('game-ui').classList.add('flex');
+            
+            if (mode === 'pve') {
+                state.players[1].name = 'AI Bot';
+                document.getElementById('name-p2').innerText = 'AI (สีส้ม)';
+                document.getElementById('status-p2').classList.replace('border-gray-600', 'border-purple-600');
+                document.getElementById('name-p2').classList.replace('text-orange-400', 'text-purple-400');
+            } else {
+                state.players[1].name = 'ผู้เล่น 2';
+                document.getElementById('name-p2').innerText = 'ผู้เล่น 2 (สีส้ม)';
+                document.getElementById('status-p2').classList.replace('border-gray-600', 'border-orange-600');
+            }
+
+            renderBoard();
+            updateTurnUI();
+        }
+
+        // --- Turn Execution ---
+        function updateTurnUI() {
+            const p = state.players[state.turn];
+            const indicator = document.getElementById('turn-indicator');
+            const btn = document.getElementById('btn-roll');
+
+            if (state.turn === 0) {
+                indicator.innerText = `ตาของ ${p.name}`;
+                indicator.className = "text-xl font-bold text-blue-400";
+                btn.disabled = false;
+                setLog("กดปุ่มเพื่อทอยลูกเต๋า");
+            } else {
+                indicator.innerText = `ตาของ ${p.name}`;
+                indicator.className = state.mode === 'pvp' ? "text-xl font-bold text-orange-400" : "text-xl font-bold text-purple-400";
+                
+                if (state.mode === 'pve') {
+                    btn.disabled = true;
+                    setLog("AI กำลังคิด...");
+                    setTimeout(handleRoll, 1500); // AI auto rolls
+                } else {
+                    btn.disabled = false;
+                    setLog("กดปุ่มเพื่อทอยลูกเต๋า");
+                }
+            }
+        }
+
+        function handleRoll() {
+            if (!state.gameActive || state.awaitingAction) return;
+            state.awaitingAction = true;
+            document.getElementById('btn-roll').disabled = true;
+            
+            const diceEl = document.getElementById('dice');
+            diceEl.classList.add('rolling');
+            
+            let rolls = 0;
+            let finalResult = 1;
+            
+            const rollInterval = setInterval(() => {
+                playSound('dice');
+                diceEl.innerText = Math.floor(Math.random() * 6) + 1;
+                rolls++;
+                if (rolls > 10) {
+                    clearInterval(rollInterval);
+                    diceEl.classList.remove('rolling');
+                    finalResult = Math.floor(Math.random() * 6) + 1;
+                    diceEl.innerText = finalResult;
+                    setLog(`ทอยได้ ${finalResult} เดินไปข้างหน้า!`);
+                    
+                    setTimeout(() => movePlayer(finalResult), 500);
+                }
+            }, 100);
+        }
+
+        function movePlayer(steps) {
+            const p = state.players[state.turn];
+            p.pos += steps;
+            
+            // Check Win Condition immediately
+            if (p.pos >= TOTAL_TILES - 1) {
+                p.pos = TOTAL_TILES - 1;
+                updateAvatars();
+                setTimeout(() => showResult(p.name + " เข้าเส้นชัย!"), 500);
+                return;
+            }
+            
+            updateAvatars();
+            
+            setTimeout(() => {
+                evaluateTile(p);
+            }, 500);
+        }
+
+        // --- Space Evaluation ---
+        function evaluateTile(player) {
+            const type = boardMap[player.pos];
+            
+            if (type === 0) {
+                setLog("ช่องปลอดภัย ไม่มีอะไรเกิดขึ้น");
+                endTurn();
+            } else if (type === 1) {
+                triggerEvent(player);
+            } else if (type === 2) {
+                triggerQuestion(player);
+            }
+        }
+
+        let currentEventDmg = 0;
+        function triggerEvent(player) {
+            const ev = events[Math.floor(Math.random() * events.length)];
+            currentEventDmg = ev.dmg;
+            
+            document.getElementById('event-desc').innerText = `${ev.text} (เสีย ${ev.dmg} HP)`;
+            
+            if (player.shield > 0) {
+                document.getElementById('shield-prompt').classList.remove('hidden');
+                document.getElementById('btn-ack-event').classList.add('hidden');
+                // AI Logic for shield
+                if (state.turn === 1 && state.mode === 'pve') {
+                    setTimeout(() => resolveEvent(true), 1500); // AI always uses shield
+                }
+            } else {
+                document.getElementById('shield-prompt').classList.add('hidden');
+                document.getElementById('btn-ack-event').classList.remove('hidden');
+                 if (state.turn === 1 && state.mode === 'pve') {
+                    setTimeout(() => resolveEvent(false), 1500);
+                }
+            }
+            
+            document.getElementById('modal-event').classList.add('active');
+        }
+
+        function resolveEvent(useShield) {
+            document.getElementById('modal-event').classList.remove('active');
+            const p = state.players[state.turn];
+            
+            if (useShield && p.shield > 0) {
+                p.shield--;
+                playSound('success');
+                setLog("ป้องกันสำเร็จ! ไม่เสีย HP");
+            } else {
+                p.hp -= currentEventDmg;
+                playSound('hurt');
+                setLog(`โดนภัยพิบัติ! เสีย ${currentEventDmg} HP`);
+                checkDeath(p);
+            }
+            
+            updateStatusUI();
+            if (state.gameActive) setTimeout(endTurn, 1000);
+        }
+
+        let currentCorrectAns = -1;
+        function triggerQuestion(player) {
+            const q = questions[Math.floor(Math.random() * questions.length)];
+            document.getElementById('q-text').innerText = q.q;
+            currentCorrectAns = q.a;
+            
+            const optionsContainer = document.getElementById('q-options');
+            optionsContainer.innerHTML = '';
+            
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "bg-gray-800 hover:bg-blue-800 text-white text-left px-4 py-3 rounded-lg transition";
+                btn.innerText = opt;
+                btn.onclick = () => answerQuestion(idx);
+                optionsContainer.appendChild(btn);
+            });
+            
+            document.getElementById('modal-question').classList.add('active');
+
+            // AI Logic for question
+            if (state.turn === 1 && state.mode === 'pve') {
+                setTimeout(() => {
+                    // AI has 70% chance to be correct
+                    const isCorrect = Math.random() < 0.7;
+                    const ans = isCorrect ? q.a : (q.a + 1) % 4; // pick wrong ans if failed
+                    answerQuestion(ans);
+                }, 2000);
+            }
+        }
+
+        function answerQuestion(selectedIdx) {
+            document.getElementById('modal-question').classList.remove('active');
+            const p = state.players[state.turn];
+            
+            if (selectedIdx === currentCorrectAns) {
+                playSound('success');
+                p.shield++;
+                p.hp = Math.min(100, p.hp + 10); // Bonus small heal
+                setLog("ตอบถูก! ได้รับ โล่ป้องกัน 1 ชิ้น");
+            } else {
+                playSound('hurt');
+                setLog("ตอบผิด! ไม่ได้รับอะไรเลย");
+            }
+            
+            updateStatusUI();
+            setTimeout(endTurn, 1000);
+        }
+
+        function checkDeath(player) {
+            if (player.hp <= 0) {
+                player.hp = 50; // Revive with 50 hp
+                player.pos = Math.max(0, player.pos - 3); // Penalty step back
+                setLog(`${player.name} หมดสภาพ! ถอยหลัง 3 ช่องและฟื้นฟู HP`);
+                updateAvatars();
+            }
+        }
+
+        function endTurn() {
+            if (!state.gameActive) return;
+            state.awaitingAction = false;
+            state.turn = state.turn === 0 ? 1 : 0;
+            updateTurnUI();
+        }
+
+        function showResult(message) {
+            state.gameActive = false;
+            playSound('success');
+            document.getElementById('result-title').className = "text-3xl font-bold mb-4 text-green-400";
+            document.getElementById('result-desc').innerText = message;
+            document.getElementById('modal-result').classList.add('active');
+        }
+        
+        // Window resize handler to reposition avatars
+        window.addEventListener('resize', () => {
+            if(state.gameActive) updateAvatars();
+        });
+
+    </script>
+</body>
+</html>

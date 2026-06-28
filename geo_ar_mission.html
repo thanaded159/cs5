@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Geo AR Mission: ภารกิจสำรวจโลกมีชีวิต</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Sarabun', sans-serif; touch-action: none; user-select: none; }
+        
+        /* Video Background for AR */
+        #video-bg {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            object-fit: cover;
+            z-index: -3;
+        }
+        .mirror { transform: scaleX(-1); }
+
+        /* Three.js Canvas */
+        #three-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        /* Hand Landmark Canvas (Visual Feedback) */
+        #hand-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* Glassmorphism Styles */
+        .glass {
+            background: rgba(20, 30, 48, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            color: white;
+        }
+
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
+        }
+        .glass-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
+
+        /* Reticle (Cursor) */
+        #reticle {
+            position: absolute;
+            width: 24px; height: 24px;
+            border: 3px solid #00ffcc;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 50;
+            display: none;
+            box-shadow: 0 0 15px #00ffcc;
+            transition: transform 0.1s;
+        }
+
+        .loader {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #00ffcc;
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .pulse { animation: pulse-anim 2s infinite; }
+        @keyframes pulse-anim { 0% { box-shadow: 0 0 0 0 rgba(0, 255, 204, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 255, 204, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 255, 204, 0); } }
+
+        /* Touch interaction layer for fallback */
+        #touch-layer { position: absolute; inset: 0; z-index: 5; touch-action: none; display: none; }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- AR Background & Canvases -->
+    <video id="video-bg" class="mirror" autoplay playsinline muted></video>
+    <canvas id="three-canvas"></canvas>
+    <canvas id="hand-canvas" class="mirror"></canvas>
+    
+    <!-- Interaction Layer for Touch/Mouse Fallback -->
+    <div id="touch-layer"></div>
+
+    <!-- Pointing Cursor -->
+    <div id="reticle"></div>
+
+    <!-- Main UI Container -->
+    <div id="ui-layer" class="absolute inset-0 z-10 flex flex-col justify-between p-4 pointer-events-none">
+        
+        <!-- Header: Title & Status -->
+        <div class="flex justify-between items-start">
+            <div class="glass px-4 py-2 pointer-events-auto">
+                <h1 class="font-bold text-lg text-emerald-300">Geo AR Mission</h1>
+                <div class="flex items-center gap-4 mt-1 text-xs text-gray-300">
+                    <div class="flex items-center gap-1"><div id="st-cam" class="w-2 h-2 rounded-full bg-red-500"></div> กล้อง</div>
+                    <div class="flex items-center gap-1"><div id="st-hand" class="w-2 h-2 rounded-full bg-red-500"></div> มือ</div>
+                    <div class="flex items-center gap-1"><div id="st-mode" class="w-2 h-2 rounded-full bg-blue-400 pulse"></div> <span id="txt-mode">รอการทำงาน</span></div>
+                </div>
+            </div>
+            
+            <div class="glass px-4 py-2 text-center">
+                <div class="text-xs text-gray-400">คะแนน</div>
+                <div class="text-xl font-bold text-yellow-400"><span id="score">0</span> / 100</div>
+            </div>
+        </div>
+
+        <!-- Middle: Mission Modal & Info -->
+        <div class="flex flex-col items-center pointer-events-none">
+            
+            <!-- Success/Info Modal -->
+            <div id="info-modal" class="glass p-6 max-w-md w-full mx-4 mb-4 transform transition-all duration-500 scale-0 pointer-events-auto">
+                <h2 id="info-title" class="text-xl font-bold text-emerald-400 mb-2">สำเร็จ!</h2>
+                <p id="info-desc" class="text-sm text-gray-200 mb-4 leading-relaxed"></p>
+                <button id="btn-next-mission" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition-colors">
+                    ภารกิจต่อไป
+                </button>
+            </div>
+
+            <!-- Options for Mission 5 -->
+            <div id="mission-options" class="hidden flex-col gap-2 w-full max-w-xs mb-4 pointer-events-auto">
+                <button class="glass-btn py-3 px-4 rounded-xl text-left" onclick="checkAnswer(1)">ก. ลมมรสุมตะวันออกเฉียงเหนือ</button>
+                <button class="glass-btn py-3 px-4 rounded-xl text-left" onclick="checkAnswer(2)">ข. ลมมรสุมตะวันตกเฉียงใต้</button>
+            </div>
+
+            <!-- Current Mission Card -->
+            <div class="glass p-4 w-full max-w-md pointer-events-auto relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1 bg-gray-700 w-full"><div id="progress-bar" class="h-full bg-gradient-to-r from-emerald-400 to-blue-500 w-0 transition-all duration-500"></div></div>
+                <div class="text-xs text-emerald-300 font-semibold mb-1 mt-1">ภารกิจที่ <span id="mission-num">1</span>/5</div>
+                <h3 id="mission-title" class="text-lg font-bold text-white mb-1">กำลังโหลดข้อมูล...</h3>
+                <p id="mission-hint" class="text-sm text-gray-300"></p>
+            </div>
+        </div>
+
+        <!-- Bottom: Controls Fallback & Tools -->
+        <div class="flex justify-between items-end pointer-events-auto">
+            <!-- Tools -->
+            <div class="flex flex-col gap-2">
+                <button id="btn-mirror" class="glass-btn p-3 rounded-full flex items-center justify-center" title="กลับซ้าย/ขวากล้อง">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                </button>
+                <button id="btn-reset" class="glass-btn p-3 rounded-full flex items-center justify-center" title="รีเซ็ตโมเดล">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+
+            <!-- Fallback D-Pad (Visible mainly on touch if hands fail) -->
+            <div id="fallback-controls" class="glass p-2 grid grid-cols-3 gap-1 opacity-80">
+                <div></div>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center" onpointerdown="startAction('up')" onpointerup="stopAction()">▲</button>
+                <div></div>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center" onpointerdown="startAction('left')" onpointerup="stopAction()">◀</button>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center text-sm" onclick="fallbackSelect()">เลือก</button>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center" onpointerdown="startAction('right')" onpointerup="stopAction()">▶</button>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center text-lg font-bold" onpointerdown="startAction('zoomout')" onpointerup="stopAction()">-</button>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center" onpointerdown="startAction('down')" onpointerup="stopAction()">▼</button>
+                <button class="glass-btn w-10 h-10 rounded flex items-center justify-center text-lg font-bold" onpointerdown="startAction('zoomin')" onpointerup="stopAction()">+</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start / Summary Overlay -->
+    <div id="overlay-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md pointer-events-auto">
+        <div class="glass p-8 max-w-lg w-full text-center mx-4 relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500 rounded-full mix-blend-multiply filter blur-2xl opacity-50"></div>
+            <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500 rounded-full mix-blend-multiply filter blur-2xl opacity-50"></div>
+            
+            <h1 id="main-title" class="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400">Geo AR Mission</h1>
+            <h2 class="text-xl font-semibold mb-6 text-gray-200">ภารกิจสำรวจโลกมีชีวิต</h2>
+            
+            <p id="main-desc" class="mb-8 text-gray-300 text-sm leading-relaxed">
+                เรียนรู้ภูมิศาสตร์ผ่านเทคโนโลยี AR ใช้นิ้วมือของคุณควบคุมโมเดล 3 มิติ เพื่อทำภารกิจให้สำเร็จ<br><br>
+                <span class="text-emerald-300">ท่าทางพื้นฐาน:</span><br>
+                ☝️ ชูนิ้วชี้ = ชี้เป้าหมาย<br>
+                🤏 จีบนิ้ว = เลือก / จับหมุน<br>
+                👐 สองมือถ่าง/หุบ = ขยาย/ย่อ
+            </p>
+            
+            <div id="loader-area" class="flex flex-col items-center justify-center gap-4 hidden mb-6">
+                <div class="loader"></div>
+                <span class="text-sm text-emerald-300 animate-pulse">กำลังโหลดระบบ AI ตรวจจับมือ...</span>
+            </div>
+
+            <button id="btn-start" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform transform hover:scale-105 active:scale-95 text-lg">
+                เริ่มภารกิจ
+            </button>
+        </div>
+    </div>
+
+<script type="module">
+    // ==========================================
+    // 1. DATA & STATE MANAGEMENT
+    // ==========================================
+    const STATE = {
+        missionIndex: 0,
+        score: 0,
+        isARReady: false,
+        isMirror: true,
+        controlMode: 'loading', // loading, hands, touch
+        
+        // Hand Tracking State
+        handsActive: false,
+        landmarks: [],
+        smoothedLandmarks: [],
+        confidenceFrames: 0,
+        
+        // Interaction State
+        cursorNDC: new THREE.Vector2(-2, -2), // Normalized Device Coordinates
+        screenCursor: {x: -100, y: -100},
+        isPinching: false,
+        isPointing: false,
+        pinchStartPos: null,
+        twoHandDist: 0,
+        targetHitName: null,
+        hoverFrames: 0,
+        
+        // Fallback State
+        fallbackAction: null,
+        isDragging: false,
+        prevTouch: {x:0, y:0}
+    };
+
+    const MISSIONS = [
+        {
+            id: 1,
+            title: "สำรวจภูเขาไฟ",
+            hint: "ภารกิจ: ใช้นิ้วชี้ (☝️) เล็งไปที่ 'ปล่องภูเขาไฟ' สีแดง",
+            targetName: "volcano_crater",
+            action: "point",
+            infoTitle: "โครงสร้างภูเขาไฟ",
+            infoDesc: "ภูเขาไฟเกิดจากแมกมาภายในโลกดันตัวขึ้นมาตามรอยแตกของเปลือกโลก เมื่อปะทุออกมาทาง 'ปล่องภูเขาไฟ' จะกลายเป็นลาวา เถ้าถ่าน และแก๊ส"
+        },
+        {
+            id: 2,
+            title: "แผ่นเปลือกโลก (ขยาย)",
+            hint: "ภารกิจ: ใช้สองมือ (👐) ถ่างออก เพื่อ 'ขยาย' ดูชั้นโครงสร้างโลก",
+            targetName: null,
+            action: "zoom",
+            infoTitle: "โครงสร้างภายในโลก",
+            infoDesc: "ขยายสำเร็จ! โลกของเราประกอบด้วยชั้นเปลือกโลก (Crust), เนื้อโลก (Mantle) และแก่นโลก (Core) ที่มีความร้อนและสถานะต่างกัน"
+        },
+        {
+            id: 3,
+            title: "จุดเกิดแผ่นดินไหว",
+            hint: "ภารกิจ: ชี้ (☝️) จุดสีแดงที่เป็น 'จุดเกิดแผ่นดินไหว' บริเวณรอยต่อแผ่นเปลือกโลก",
+            targetName: "quake_epicenter",
+            action: "point",
+            infoTitle: "รอยต่อแผ่นเปลือกโลก",
+            infoDesc: "ถูกต้อง! แผ่นดินไหวมักเกิดบริเวณรอยต่อของแผ่นเปลือกโลก เนื่องจากการชน การแยก หรือการเลื่อนผ่านกัน ทำให้เกิดการปลดปล่อยพลังงาน"
+        },
+        {
+            id: 4,
+            title: "แผนที่ภูมิประเทศ",
+            hint: "ภารกิจ: หมุนโมเดล และชี้ (☝️) บริเวณที่ 'สูงที่สุด' บนแผนที่ (สีขาว/น้ำตาล)",
+            targetName: "topo_peak",
+            action: "point",
+            infoTitle: "เส้นชั้นความสูง",
+            infoDesc: "แผนที่ภูมิประเทศใช้สีและเส้นชั้นความสูง (Contour Line) แสดงลักษณะภูมิประเทศ สีเขียวคือที่ราบ สีน้ำตาล/ขาวคือภูเขาสูง"
+        },
+        {
+            id: 5,
+            title: "ระบบลมมรสุม",
+            hint: "ภารกิจ: สังเกตลูกศรลม แล้วเลือกตอบว่า ลมใดพัดจากทะเลเข้าหาฝั่ง",
+            targetName: null,
+            action: "quiz",
+            correctAnswer: 2, // ข. ลมมรสุมตะวันตกเฉียงใต้
+            infoTitle: "ลมมรสุมตะวันตกเฉียงใต้",
+            infoDesc: "ลมมรสุมเกิดจากความแตกต่างของอุณหภูมิและความกดอากาศ ลมมรสุมตะวันตกเฉียงใต้พัดจากมหาสมุทรเข้าสู่แผ่นดิน นำความชุ่มชื้นและฝนมาตก"
+        }
+    ];
+
+    // ==========================================
+    // 2. DOM ELEMENTS
+    // ==========================================
+    const DOM = {
+        video: document.getElementById('video-bg'),
+        canvas3D: document.getElementById('three-canvas'),
+        canvasHand: document.getElementById('hand-canvas'),
+        touchLayer: document.getElementById('touch-layer'),
+        reticle: document.getElementById('reticle'),
+        
+        stCam: document.getElementById('st-cam'),
+        stHand: document.getElementById('st-hand'),
+        stMode: document.getElementById('st-mode'),
+        txtMode: document.getElementById('txt-mode'),
+        score: document.getElementById('score'),
+        progressBar: document.getElementById('progress-bar'),
+        
+        missionNum: document.getElementById('mission-num'),
+        missionTitle: document.getElementById('mission-title'),
+        missionHint: document.getElementById('mission-hint'),
+        missionOptions: document.getElementById('mission-options'),
+        
+        infoModal: document.getElementById('info-modal'),
+        infoTitle: document.getElementById('info-title'),
+        infoDesc: document.getElementById('info-desc'),
+        btnNext: document.getElementById('btn-next-mission'),
+        
+        overlay: document.getElementById('overlay-screen'),
+        btnStart: document.getElementById('btn-start'),
+        loaderArea: document.getElementById('loader-area'),
+        mainTitle: document.getElementById('main-title'),
+        mainDesc: document.getElementById('main-desc'),
+        
+        btnMirror: document.getElementById('btn-mirror'),
+        btnReset: document.getElementById('btn-reset'),
+        fallbackControls: document.getElementById('fallback-controls')
+    };
+
+    const ctxHand = DOM.canvasHand.getContext('2d');
+
+    // ==========================================
+    // 3. THREE.JS SETUP
+    // ==========================================
+    const scene = new THREE.Scene();
+    
+    // Camera
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.z = 8;
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ canvas: DOM.canvas3D, alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    // Main Container for Rotation/Scaling
+    const modelContainer = new THREE.Group();
+    scene.add(modelContainer);
+
+    // Raycaster for interactions
+    const raycaster = new THREE.Raycaster();
+
+    // --- Utility: Create Text Sprite ---
+    function createTextLabel(text, color = 'white', bgColor = 'rgba(0,0,0,0.6)') {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256; canvas.height = 64;
+        
+        context.fillStyle = bgColor;
+        context.roundRect(0, 0, canvas.width, canvas.height, 10);
+        context.fill();
+        
+        context.font = 'Bold 24px Arial, sans-serif'; // Fallback font if Sarabun fails in canvas
+        context.fillStyle = color;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(text, canvas.width / 2, canvas.height / 2);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(1.5, 0.375, 1);
+        sprite.renderOrder = 999; // Render on top
+        return sprite;
+    }
+
+    // ==========================================
+    // 4. PROCEDURAL MODEL GENERATORS
+    // ==========================================
+    const models = [];
+
+    // Model 1: Volcano
+    function buildVolcano() {
+        const group = new THREE.Group();
+        
+        // Base Cone (Low poly)
+        const geoBase = new THREE.ConeGeometry(2.5, 3, 16);
+        const matBase = new THREE.MeshLambertMaterial({ color: 0x5C4033, flatShading: true });
+        const base = new THREE.Mesh(geoBase, matBase);
+        base.position.y = -0.5;
+        group.add(base);
+
+        // Ground Layer
+        const geoGround = new THREE.CylinderGeometry(3.5, 3.5, 0.2, 32);
+        const matGround = new THREE.MeshLambertMaterial({ color: 0x2e4a22 });
+        const ground = new THREE.Mesh(geoGround, matGround);
+        ground.position.y = -2;
+        group.add(ground);
+
+        // Crater (Target)
+        const geoCrater = new THREE.CylinderGeometry(0.6, 0.4, 0.3, 16);
+        const matCrater = new THREE.MeshLambertMaterial({ color: 0xff3300, emissive: 0x881100 });
+        const crater = new THREE.Mesh(geoCrater, matCrater);
+        crater.position.y = 1.1;
+        crater.name = "volcano_crater";
+        group.add(crater);
+
+        // Lava Stream
+        const geoLava = new THREE.CylinderGeometry(0.2, 0.4, 2, 8);
+        const lava = new THREE.Mesh(geoLava, matCrater);
+        lava.position.set(0.8, -0.2, 0);
+        lava.rotation.z = -Math.PI / 8;
+        group.add(lava);
+
+        // Particles (Smoke)
+        const smokeGroup = new THREE.Group();
+        smokeGroup.name = "smokeSystem";
+        const geoSmoke = new THREE.DodecahedronGeometry(0.3, 0);
+        const matSmoke = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.7 });
+        for(let i=0; i<10; i++) {
+            const sm = new THREE.Mesh(geoSmoke, matSmoke);
+            sm.position.set((Math.random()-0.5)*0.5, 1.5 + Math.random()*2, (Math.random()-0.5)*0.5);
+            sm.userData = { speed: Math.random() * 0.02 + 0.01 };
+            smokeGroup.add(sm);
+        }
+        group.add(smokeGroup);
+
+        // Labels
+        const lblCrater = createTextLabel("ปล่องภูเขาไฟ"); lblCrater.position.set(0, 2.5, 0); group.add(lblCrater);
+        const lblLava = createTextLabel("ลาวา"); lblLava.position.set(2, 0, 0); group.add(lblLava);
+
+        return group;
+    }
+
+    // Model 2: Tectonic Plates
+    function buildTectonic() {
+        const group = new THREE.Group();
+        group.name = "tectonicGroup";
+
+        // Crust (Plate 1)
+        const geoCrust1 = new THREE.BoxGeometry(2, 0.5, 3);
+        const matCrust = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
+        const p1 = new THREE.Mesh(geoCrust1, matCrust);
+        p1.position.set(-1.05, 0.5, 0);
+        group.add(p1);
+
+        // Crust (Plate 2 - subducting)
+        const p2 = new THREE.Mesh(geoCrust1, matCrust);
+        p2.position.set(1.05, 0.3, 0);
+        p2.rotation.z = 0.1;
+        group.add(p2);
+
+        // Mantle (Inner layer) - Initially hidden/small scale inside
+        const geoMantle = new THREE.BoxGeometry(4.2, 1.5, 3);
+        const matMantle = new THREE.MeshLambertMaterial({ color: 0xd2691e });
+        const mantle = new THREE.Mesh(geoMantle, matMantle);
+        mantle.position.set(0, -0.5, 0);
+        group.add(mantle);
+
+        // Core (Inner most)
+        const geoCore = new THREE.SphereGeometry(0.8, 16, 16);
+        const matCore = new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0x553300 });
+        const core = new THREE.Mesh(geoCore, matCore);
+        core.position.set(0, -1.8, 0);
+        group.add(core);
+
+        // Epicenters (Targets & Decoys)
+        const geoEpi = new THREE.SphereGeometry(0.15, 16, 16);
+        const matEpiTarget = new THREE.MeshLambertMaterial({ color: 0xff0000, emissive: 0xaa0000 });
+        const matEpiDecoy = new THREE.MeshLambertMaterial({ color: 0x555555 }); // Fake ones
+
+        const targetEpi = new THREE.Mesh(geoEpi, matEpiTarget);
+        targetEpi.position.set(0, 0.5, 0); // At the boundary
+        targetEpi.name = "quake_epicenter";
+        group.add(targetEpi);
+
+        const decoy1 = new THREE.Mesh(geoEpi, matEpiDecoy); decoy1.position.set(-1, 0.8, 1); group.add(decoy1);
+        const decoy2 = new THREE.Mesh(geoEpi, matEpiDecoy); decoy2.position.set(1.5, 0.6, -1); group.add(decoy2);
+
+        // Labels
+        const lblCrust = createTextLabel("เปลือกโลก (Crust)"); lblCrust.position.set(-2, 1.5, 0); group.add(lblCrust);
+        const lblMantle = createTextLabel("เนื้อโลก (Mantle)"); lblMantle.position.set(-2.5, -0.5, 0); group.add(lblMantle);
+
+        return group;
+    }
+
+    // Model 3: Topographic Map
+    function buildTopo() {
+        const group = new THREE.Group();
+        
+        // Grid Plane
+        const size = 4;
+        const segs = 30;
+        const geo = new THREE.PlaneGeometry(size, size, segs, segs);
+        geo.rotateX(-Math.PI / 2);
+        
+        const pos = geo.attributes.position;
+        let highestPoint = new THREE.Vector3(0,-999,0);
+
+        // Displace vertices and assign vertex colors
+        const colors = [];
+        const colorObj = new THREE.Color();
+        
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const z = pos.getZ(i);
+            
+            // Noise function replacement
+            let h = Math.sin(x*1.5)*Math.cos(z*1.5)*0.5 + Math.sin(x*2+z)*0.3;
+            if(h < -0.2) h = -0.2; // Sea level floor
+            
+            pos.setY(i, h);
+            
+            // Track highest peak
+            if(h > highestPoint.y) {
+                highestPoint.set(x, h, z);
+            }
+
+            // Assign Colors based on height
+            if (h <= -0.1) colorObj.setHex(0x1e90ff); // Sea
+            else if (h < 0.2) colorObj.setHex(0x228b22); // Plains
+            else if (h < 0.6) colorObj.setHex(0x8b4513); // Hills
+            else colorObj.setHex(0xffffff); // Peak
+
+            colors.push(colorObj.r, colorObj.g, colorObj.b);
+        }
+        
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.computeVertexNormals();
+
+        const mat = new THREE.MeshLambertMaterial({ vertexColors: true, wireframe: false });
+        const terrain = new THREE.Mesh(geo, mat);
+        group.add(terrain);
+
+        // Wireframe contour overlay
+        const matWire = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true, opacity: 0.1 });
+        const wire = new THREE.Mesh(geo, matWire);
+        wire.position.y = 0.01; // slightly above
+        group.add(wire);
+
+        // Target at Peak (Invisible Hitbox)
+        const geoHitbox = new THREE.SphereGeometry(0.4, 8, 8);
+        const matHitbox = new THREE.MeshBasicMaterial({ visible: false });
+        const peakBox = new THREE.Mesh(geoHitbox, matHitbox);
+        peakBox.position.copy(highestPoint);
+        peakBox.name = "topo_peak";
+        group.add(peakBox);
+
+        // Visual Marker for Peak (optional, making it slightly visible)
+        const geoMarker = new THREE.CylinderGeometry(0, 0.1, 0.4);
+        const matMarker = new THREE.MeshBasicMaterial({color: 0xff0000});
+        const marker = new THREE.Mesh(geoMarker, matMarker);
+        marker.position.copy(highestPoint);
+        marker.position.y += 0.2;
+        group.add(marker);
+        
+        // Labels
+        const lblSea = createTextLabel("ทะเล", "white", "rgba(0,0,255,0.5)"); lblSea.position.set(-2, 0.5, -2); group.add(lblSea);
+        const lblPeak = createTextLabel("ยอดเขา", "black", "rgba(255,255,255,0.7)"); lblPeak.position.copy(highestPoint).add(new THREE.Vector3(0,1,0)); group.add(lblPeak);
+
+        return group;
+    }
+
+    // Model 4: Monsoon
+    function buildMonsoon() {
+        const group = new THREE.Group();
+        
+        // Land (Right)
+        const geoLand = new THREE.BoxGeometry(2.5, 0.2, 4);
+        const matLand = new THREE.MeshLambertMaterial({ color: 0x55aa55 });
+        const land = new THREE.Mesh(geoLand, matLand);
+        land.position.set(1.25, 0, 0);
+        group.add(land);
+
+        // Sea (Left)
+        const geoSea = new THREE.BoxGeometry(2.5, 0.15, 4);
+        const matSea = new THREE.MeshLambertMaterial({ color: 0x3377ff });
+        const sea = new THREE.Mesh(geoSea, matSea);
+        sea.position.set(-1.25, 0, 0);
+        group.add(sea);
+
+        // Sun
+        const geoSun = new THREE.SphereGeometry(0.4, 16, 16);
+        const matSun = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const sun = new THREE.Mesh(geoSun, matSun);
+        sun.position.set(2, 2.5, -1);
+        group.add(sun);
+
+        // Cloud & Rain
+        const cloudGroup = new THREE.Group();
+        const geoCloud = new THREE.SphereGeometry(0.3, 8, 8);
+        const matCloud = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const positions = [[0,0,0], [0.3,0.1,0.2], [-0.3,-0.1,0], [0.2,-0.1,-0.2]];
+        positions.forEach(p => {
+            const c = new THREE.Mesh(geoCloud, matCloud);
+            c.position.set(...p);
+            cloudGroup.add(c);
+        });
+        cloudGroup.position.set(1, 2, 0);
+        group.add(cloudGroup);
+        
+        // Wind Arrow (Southwest - Sea to Land)
+        const arrowGroup = new THREE.Group();
+        const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.5), new THREE.MeshLambertMaterial({color: 0x00ccff}));
+        const head = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4), new THREE.MeshLambertMaterial({color: 0x00ccff}));
+        cylinder.rotation.z = Math.PI / 2;
+        head.position.x = 0.75;
+        head.rotation.z = -Math.PI / 2;
+        arrowGroup.add(cylinder);
+        arrowGroup.add(head);
+        
+        arrowGroup.position.set(-0.5, 1, 0);
+        arrowGroup.rotation.y = -Math.PI/8; // Slightly angled
+        group.add(arrowGroup);
+        
+        // Labels
+        const lblSeaT = createTextLabel("ทะเล (ความกดอากาศสูง)"); lblSeaT.position.set(-1.5, 0.5, 1); group.add(lblSeaT);
+        const lblLand = createTextLabel("แผ่นดิน (ความกดอากาศต่ำ)"); lblLand.position.set(1.5, 0.5, 1); group.add(lblLand);
+
+        return group;
+    }
+
+    models.push(buildVolcano(), buildTectonic(), buildTectonic(), buildTopo(), buildMonsoon());
+
+    // ==========================================
+    // 5. MEDIAPIPE HAND TRACKING
+    // ==========================================
+    let hands;
+    let cameraUtils;
+
+    async function initMediaPipe() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user", width: 640, height: 480 } 
+            });
+            DOM.video.srcObject = stream;
+            
+            hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1, // 0 is faster, 1 is more accurate
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.7
+            });
+
+            hands.onResults(onHandResults);
+
+            cameraUtils = new Camera(DOM.video, {
+                onFrame: async () => {
+                    await hands.send({image: DOM.video});
+                },
+                width: 640,
+                height: 480
+            });
+            
+            cameraUtils.start();
+            STATE.isARReady = true;
+            updateStatus('camera', true);
+            
+            // Hide Loader, enable start button
+            DOM.loaderArea.classList.add('hidden');
+            DOM.btnStart.innerText = "เริ่มภารกิจ";
+            DOM.btnStart.disabled = false;
+
+        } catch (error) {
+            console.error("Camera Error:", error);
+            alert("ไม่สามารถเข้าถึงกล้องได้ ระบบจะสลับไปใช้โหมดสัมผัส/เมาส์");
+            STATE.controlMode = 'touch';
+            updateStatus('camera', false);
+            DOM.loaderArea.classList.add('hidden');
+            DOM.btnStart.innerText = "เริ่มภารกิจ (โหมดสัมผัส)";
+            DOM.fallbackControls.classList.remove('opacity-80');
+        }
+    }
+
+    function onHandResults(results) {
+        // Setup Canvas context
+        DOM.canvasHand.width = DOM.video.videoWidth;
+        DOM.canvasHand.height = DOM.video.videoHeight;
+        ctxHand.clearRect(0, 0, DOM.canvasHand.width, DOM.canvasHand.height);
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            STATE.confidenceFrames++;
+            if(STATE.confidenceFrames > 5) {
+                STATE.handsActive = true;
+                STATE.controlMode = 'hands';
+                updateStatus('hand', true);
+            }
+
+            // Draw Landmarks (Visual Feedback)
+            for (const landmarks of results.multiHandLandmarks) {
+                drawConnectors(ctxHand, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                drawLandmarks(ctxHand, landmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
+            }
+
+            processGestures(results.multiHandLandmarks);
+
+        } else {
+            STATE.confidenceFrames = 0;
+            STATE.handsActive = false;
+            if(STATE.controlMode === 'hands') updateStatus('hand', false);
+            
+            STATE.isPinching = false;
+            STATE.isPointing = false;
+            DOM.reticle.style.display = 'none';
+        }
+    }
+
+    function processGestures(multiHands) {
+        const hand1 = multiHands[0];
+        
+        // 1. Calculate screen position from Index Finger Tip (Landmark 8)
+        const indexTip = hand1[8];
+        
+        // Handle Mirroring
+        let rawX = indexTip.x;
+        if(STATE.isMirror) rawX = 1 - rawX; 
+        
+        const targetScreenX = rawX * window.innerWidth;
+        const targetScreenY = indexTip.y * window.innerHeight;
+
+        // Apply Smoothing (Lerp)
+        if(STATE.screenCursor.x === -100) {
+            STATE.screenCursor = {x: targetScreenX, y: targetScreenY};
+        } else {
+            const lerpFactor = 0.4;
+            STATE.screenCursor.x += (targetScreenX - STATE.screenCursor.x) * lerpFactor;
+            STATE.screenCursor.y += (targetScreenY - STATE.screenCursor.y) * lerpFactor;
+        }
+
+        // Map to Three.js NDC
+        STATE.cursorNDC.x = (STATE.screenCursor.x / window.innerWidth) * 2 - 1;
+        STATE.cursorNDC.y = -(STATE.screenCursor.y / window.innerHeight) * 2 + 1;
+
+        // Update Reticle DOM
+        DOM.reticle.style.display = 'block';
+        DOM.reticle.style.left = `${STATE.screenCursor.x}px`;
+        DOM.reticle.style.top = `${STATE.screenCursor.y}px`;
+
+        // 2. Detect Pinch (Thumb [4] and Index [8] distance)
+        const getDist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        const pinchDist = getDist(hand1[4], hand1[8]);
+        const wasPinching = STATE.isPinching;
+        STATE.isPinching = pinchDist < 0.05; // Threshold
+
+        // 3. Detect Pointing (Index extended, middle/ring/pinky folded)
+        const wrist = hand1[0];
+        const indexDist = getDist(hand1[8], wrist);
+        const middleDist = getDist(hand1[12], wrist);
+        const ringDist = getDist(hand1[16], wrist);
+        // If index is significantly further than others, it's pointing
+        STATE.isPointing = (indexDist > middleDist + 0.1) && (indexDist > ringDist + 0.1) && !STATE.isPinching;
+
+        // Visual feedback on reticle
+        if(STATE.isPinching) {
+            DOM.reticle.style.borderColor = '#ffcc00';
+            DOM.reticle.style.transform = 'translate(-50%, -50%) scale(0.8)';
+        } else if (STATE.isPointing) {
+            DOM.reticle.style.borderColor = '#00ffcc';
+            DOM.reticle.style.transform = 'translate(-50%, -50%) scale(1.2)';
+        } else {
+            DOM.reticle.style.borderColor = 'white';
+            DOM.reticle.style.transform = 'translate(-50%, -50%) scale(1)';
+        }
+
+        // 4. Handle Rotation (Pinch & Drag)
+        if (STATE.isPinching) {
+            if (!wasPinching) {
+                STATE.pinchStartPos = { x: STATE.screenCursor.x, y: STATE.screenCursor.y };
+            } else if (STATE.pinchStartPos) {
+                const deltaX = STATE.screenCursor.x - STATE.pinchStartPos.x;
+                const deltaY = STATE.screenCursor.y - STATE.pinchStartPos.y;
+                modelContainer.rotation.y += deltaX * 0.005;
+                modelContainer.rotation.x += deltaY * 0.005;
+                STATE.pinchStartPos = { x: STATE.screenCursor.x, y: STATE.screenCursor.y }; // update
+            }
+        } else {
+            STATE.pinchStartPos = null;
+        }
+
+        // 5. Detect Two Hands (Zoom)
+        if (multiHands.length === 2) {
+            const hand2 = multiHands[1];
+            
+            // Fix mirroring for hand2 index tip distance calculation
+            let x1 = hand1[8].x; let x2 = hand2[8].x;
+            if(STATE.isMirror) { x1 = 1-x1; x2 = 1-x2; }
+            
+            const dist = Math.hypot(x1 - x2, hand1[8].y - hand2[8].y);
+            
+            if (STATE.twoHandDist > 0) {
+                const delta = dist - STATE.twoHandDist;
+                let newScale = modelContainer.scale.x + (delta * 3); // Sensitivity
+                newScale = Math.max(0.3, Math.min(newScale, 3.5)); // Clamp
+                modelContainer.scale.set(newScale, newScale, newScale);
+            }
+            STATE.twoHandDist = dist;
+        } else {
+            STATE.twoHandDist = 0;
+        }
+        
+        // 6. Detect Open Hand (Reset) - simple check: all fingertips far from wrist
+        const thumbDist = getDist(hand1[4], wrist);
+        const pinkyDist = getDist(hand1[20], wrist);
+        if (indexDist > 0.4 && middleDist > 0.4 && ringDist > 0.4 && pinkyDist > 0.4 && thumbDist > 0.3) {
+           // Reset logic handled in main loop or trigger event (avoid triggering too often)
+        }
+    }
+
+    // ==========================================
+    // 6. GAME LOGIC & MISSION MANAGEMENT
+    // ==========================================
+    
+    function loadMission(index) {
+        if(index >= MISSIONS.length) {
+            showFinalSummary();
+            return;
+        }
+
+        const mission = MISSIONS[index];
+        STATE.missionIndex = index;
+        STATE.targetHitName = null;
+        STATE.hoverFrames = 0;
+        
+        // Update UI
+        DOM.missionNum.innerText = index + 1;
+        DOM.missionTitle.innerText = mission.title;
+        DOM.missionHint.innerText = mission.hint;
+        DOM.progressBar.style.width = `${((index) / MISSIONS.length) * 100}%`;
+        
+        // Hide/Show special UI elements
+        DOM.missionOptions.classList.add('hidden');
+        if(mission.action === 'quiz') {
+            DOM.missionOptions.classList.remove('hidden');
+        }
+
+        // Swap 3D Model
+        modelContainer.clear(); // Remove old
+        const currentModel = models[index];
+        modelContainer.add(currentModel);
+        
+        // Reset Transform
+        modelContainer.scale.set(1, 1, 1);
+        modelContainer.rotation.set(0, 0, 0);
+    }
+
+    function checkMissionLogic() {
+        if(STATE.missionIndex >= MISSIONS.length) return;
+        const mission = MISSIONS[STATE.missionIndex];
+
+        // 1. Raycast (Pointing) Mission Logic
+        if (mission.action === 'point') {
+            raycaster.setFromCamera(STATE.cursorNDC, camera);
+            const intersects = raycaster.intersectObject(modelContainer, true);
+            
+            let hitTarget = false;
+            if (intersects.length > 0 && intersects[0].object.name === mission.targetName) {
+                hitTarget = true;
+            }
+
+            // Must Point OR Fallback Touch Select
+            if (hitTarget && (STATE.isPointing || STATE.fallbackAction === 'select')) {
+                STATE.hoverFrames++;
+                DOM.reticle.style.boxShadow = `0 0 ${15 + STATE.hoverFrames}px #ffff00`;
+                
+                if(STATE.hoverFrames > 30) { // ~0.5 seconds hold
+                    STATE.hoverFrames = 0;
+                    STATE.fallbackAction = null;
+                    completeMission();
+                }
+            } else {
+                STATE.hoverFrames = 0;
+            }
+        }
+        // 2. Zoom Mission Logic
+        else if (mission.action === 'zoom') {
+            if (modelContainer.scale.x > 1.8) {
+                completeMission();
+            }
+        }
+    }
+
+    function completeMission() {
+        // Prevent double trigger
+        if(!DOM.infoModal.classList.contains('scale-0')) return;
+
+        const mission = MISSIONS[STATE.missionIndex];
+        
+        // Update Score
+        STATE.score += 20;
+        DOM.score.innerText = STATE.score;
+        DOM.progressBar.style.width = `${((STATE.missionIndex + 1) / MISSIONS.length) * 100}%`;
+
+        // Show Modal
+        DOM.infoTitle.innerText = mission.infoTitle;
+        DOM.infoDesc.innerText = mission.infoDesc;
+        DOM.infoModal.classList.remove('scale-0');
+        DOM.infoModal.classList.add('scale-100');
+    }
+
+    // Global function for quiz buttons
+    window.checkAnswer = function(ansIndex) {
+        const mission = MISSIONS[STATE.missionIndex];
+        if(ansIndex === mission.correctAnswer) {
+            completeMission();
+        } else {
+            DOM.missionHint.innerText = "❌ คำตอบยังไม่ถูก ลองพิจารณาลูกศรที่พัดจากสีน้ำเงิน (ทะเล) ไปสีเขียว (แผ่นดิน)";
+            DOM.missionHint.classList.add("text-red-400");
+            setTimeout(() => DOM.missionHint.classList.remove("text-red-400"), 2000);
+        }
+    };
+
+    DOM.btnNext.addEventListener('click', () => {
+        DOM.infoModal.classList.remove('scale-100');
+        DOM.infoModal.classList.add('scale-0');
+        setTimeout(() => {
+            loadMission(STATE.missionIndex + 1);
+        }, 500); // Wait for transition
+    });
+
+    function showFinalSummary() {
+        DOM.uiLayer = document.getElementById('ui-layer');
+        DOM.uiLayer.style.display = 'none'; // Hide main UI
+        
+        DOM.overlay.classList.remove('hidden');
+        DOM.mainTitle.innerText = "สรุปผลการเรียนรู้";
+        DOM.mainTitle.classList.remove('text-transparent');
+        DOM.mainTitle.classList.add('text-yellow-400');
+        
+        let grade = "";
+        if(STATE.score === 100) grade = "ยอดเยี่ยม! คุณคือนักภูมิศาสตร์ตัวจริง";
+        else if (STATE.score >= 60) grade = "ทำได้ดี! มีความเข้าใจภูมิศาสตร์พื้นฐาน";
+        else grade = "พยายามอีกนิด! ลองสำรวจใหม่อีกครั้งนะ";
+
+        DOM.mainDesc.innerHTML = `
+            คะแนนรวมของคุณคือ <strong>${STATE.score} / 100</strong><br>
+            <span class="text-lg text-emerald-300 mt-2 block">${grade}</span>
+        `;
+        
+        DOM.btnStart.innerText = "เริ่มภารกิจใหม่";
+        DOM.btnStart.onclick = resetGame;
+    }
+
+    function resetGame() {
+        STATE.score = 0;
+        DOM.score.innerText = "0";
+        DOM.uiLayer.style.display = 'flex';
+        DOM.overlay.classList.add('hidden');
+        loadMission(0);
+    }
+
+    // ==========================================
+    // 7. UI & FALLBACK CONTROLS
+    // ==========================================
+    
+    function updateStatus(type, isActive) {
+        if(type === 'camera') {
+            DOM.stCam.className = isActive ? "w-2 h-2 rounded-full bg-emerald-500" : "w-2 h-2 rounded-full bg-red-500";
+        } else if (type === 'hand') {
+            DOM.stHand.className = isActive ? "w-2 h-2 rounded-full bg-emerald-500" : "w-2 h-2 rounded-full bg-gray-500";
+            
+            if(isActive) {
+                DOM.stMode.className = "w-2 h-2 rounded-full bg-emerald-500 pulse";
+                DOM.txtMode.innerText = "ตรวจจับมือ (Hand)";
+                DOM.touchLayer.style.display = 'none';
+            } else if (STATE.controlMode === 'touch') {
+                DOM.stMode.className = "w-2 h-2 rounded-full bg-yellow-400";
+                DOM.txtMode.innerText = "โหมดสัมผัส (Touch)";
+                DOM.touchLayer.style.display = 'block';
+            }
+        }
+    }
+
+    // UI Buttons
+    DOM.btnMirror.addEventListener('click', () => {
+        STATE.isMirror = !STATE.isMirror;
+        DOM.video.classList.toggle('mirror');
+        DOM.canvasHand.classList.toggle('mirror');
+    });
+
+    DOM.btnReset.addEventListener('click', () => {
+        modelContainer.rotation.set(0,0,0);
+        modelContainer.scale.set(1,1,1);
+    });
+
+    // Fallback D-Pad logic
+    window.startAction = function(action) { STATE.fallbackAction = action; }
+    window.stopAction = function() { STATE.fallbackAction = null; }
+    window.fallbackSelect = function() { STATE.fallbackAction = 'select'; setTimeout(() => STATE.fallbackAction = null, 100); }
+
+    // Touch/Mouse Drag on screen (Fallback)
+    DOM.touchLayer.addEventListener('pointerdown', (e) => {
+        STATE.isDragging = true;
+        STATE.prevTouch = {x: e.clientX, y: e.clientY};
+        updateCursorFallback(e);
+    });
+    DOM.touchLayer.addEventListener('pointermove', (e) => {
+        updateCursorFallback(e);
+        if(STATE.isDragging) {
+            const dx = e.clientX - STATE.prevTouch.x;
+            const dy = e.clientY - STATE.prevTouch.y;
+            modelContainer.rotation.y += dx * 0.01;
+            modelContainer.rotation.x += dy * 0.01;
+            STATE.prevTouch = {x: e.clientX, y: e.clientY};
+        }
+    });
+    DOM.touchLayer.addEventListener('pointerup', () => { STATE.isDragging = false; });
+    
+    // Mouse wheel zoom
+    DOM.touchLayer.addEventListener('wheel', (e) => {
+        let s = modelContainer.scale.x - (e.deltaY * 0.002);
+        s = Math.max(0.3, Math.min(s, 3.5));
+        modelContainer.scale.set(s,s,s);
+    });
+
+    function updateCursorFallback(e) {
+        if(STATE.controlMode !== 'hands') {
+            STATE.screenCursor = {x: e.clientX, y: e.clientY};
+            STATE.cursorNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+            STATE.cursorNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            
+            DOM.reticle.style.display = 'block';
+            DOM.reticle.style.left = `${e.clientX}px`;
+            DOM.reticle.style.top = `${e.clientY}px`;
+        }
+    }
+
+
+    // ==========================================
+    // 8. MAIN RENDER LOOP
+    // ==========================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+
+        // Auto-rotation if no interaction
+        if(!STATE.isPinching && !STATE.isDragging && !STATE.twoHandDist && modelContainer.children.length > 0) {
+            modelContainer.rotation.y += 0.1 * delta;
+        }
+
+        // Animate procedural elements (e.g., Volcano smoke)
+        if(STATE.missionIndex === 0) {
+            const smoke = modelContainer.getObjectByName("smokeSystem");
+            if(smoke) {
+                smoke.children.forEach(s => {
+                    s.position.y += s.userData.speed;
+                    s.position.x += (Math.random()-0.5)*0.02;
+                    s.material.opacity -= 0.005;
+                    if(s.position.y > 4 || s.material.opacity <= 0) {
+                        s.position.set((Math.random()-0.5)*0.5, 1.5, (Math.random()-0.5)*0.5);
+                        s.material.opacity = 0.7;
+                    }
+                });
+            }
+        }
+
+        // Process Fallback D-Pad actions
+        if (STATE.fallbackAction) {
+            const speed = 2 * delta;
+            switch(STATE.fallbackAction) {
+                case 'left': modelContainer.rotation.y -= speed; break;
+                case 'right': modelContainer.rotation.y += speed; break;
+                case 'up': modelContainer.rotation.x -= speed; break;
+                case 'down': modelContainer.rotation.x += speed; break;
+                case 'zoomin': 
+                    let s_in = modelContainer.scale.x + speed; 
+                    if(s_in <= 3.5) modelContainer.scale.set(s_in,s_in,s_in); 
+                    break;
+                case 'zoomout': 
+                    let s_out = modelContainer.scale.x - speed; 
+                    if(s_out >= 0.3) modelContainer.scale.set(s_out,s_out,s_out); 
+                    break;
+            }
+        }
+
+        checkMissionLogic();
+        renderer.render(scene, camera);
+    }
+
+    // Handle Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start App
+    DOM.btnStart.addEventListener('click', () => {
+        if(DOM.btnStart.disabled) return; // Prevent clicking while loading
+        DOM.overlay.classList.add('hidden');
+        
+        // If hand tracking wasn't setup (e.g. timeout or error), force touch mode
+        if(!STATE.isARReady) {
+            STATE.controlMode = 'touch';
+            updateStatus('hand', false);
+        }
+        
+        loadMission(0);
+    });
+
+    // Init Sequence
+    DOM.btnStart.disabled = true;
+    DOM.loaderArea.classList.remove('hidden');
+    DOM.btnStart.innerText = "กำลังเตรียมระบบ...";
+    
+    // Start camera and AI
+    initMediaPipe();
+    
+    // Start rendering loop
+    animate();
+
+</script>
+</body>
+</html>

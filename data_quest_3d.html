@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Data Quest 3D: ภารกิจนักวิทยาการข้อมูล</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap');
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Sarabun', system-ui, sans-serif; background: #0f172a; }
+    #gameCanvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    .glass { background: rgba(15, 23, 42, 0.62); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 18px 60px rgba(0,0,0,0.35); }
+    .soft-glow { box-shadow: 0 0 30px rgba(251, 191, 36, 0.35), 0 0 70px rgba(56, 189, 248, 0.18); }
+    .name-tag { position: fixed; transform: translate(-50%, -50%); padding: 5px 12px; border-radius: 999px; color: white; font-size: 13px; font-weight: 800; letter-spacing: .01em; background: rgba(14, 165, 233, 0.84); border: 1px solid rgba(255,255,255,0.65); text-shadow: 0 1px 2px rgba(0,0,0,0.45); box-shadow: 0 8px 24px rgba(2,132,199,0.35); pointer-events: none; z-index: 25; white-space: nowrap; }
+    .hidden-ui { display: none !important; }
+    .choice-btn:disabled { cursor: not-allowed; opacity: .98; }
+    .scanline::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to bottom, transparent, rgba(255,255,255,.04), transparent); transform: translateY(-100%); animation: scan 3.5s linear infinite; }
+    @keyframes scan { to { transform: translateY(100%); } }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="nameTag" class="name-tag hidden-ui">Data Scientist</div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden-ui fixed top-4 left-4 z-20 w-[min(92vw,330px)] glass rounded-2xl p-4 text-white">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-xl bg-cyan-400/20 border border-cyan-200/40 grid place-items-center text-2xl">📊</div>
+      <div class="min-w-0">
+        <div class="text-xs text-cyan-100/80">ผู้เล่น</div>
+        <div id="hudName" class="font-extrabold truncate">Data Scientist</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mt-3">
+      <div class="rounded-xl bg-white/10 p-3 border border-white/10">
+        <div class="text-xs text-slate-200">คะแนน</div>
+        <div id="scoreText" class="text-2xl font-extrabold text-amber-300">0</div>
+      </div>
+      <div class="rounded-xl bg-white/10 p-3 border border-white/10">
+        <div class="text-xs text-slate-200">ดาวความรู้</div>
+        <div id="starsText" class="text-2xl font-extrabold text-yellow-300">0/10</div>
+      </div>
+    </div>
+    <div class="mt-3 text-xs text-slate-200 leading-relaxed">ภารกิจ: เก็บ Data Point ตอบ Data Mission และหลบ Data Bug</div>
+  </div>
+
+  <!-- Home Button -->
+  <button id="homeBtn" class="hidden-ui fixed top-4 right-4 z-20 w-14 h-14 rounded-2xl glass text-white text-2xl hover:scale-105 active:scale-95 transition soft-glow" title="กลับหน้าหลัก">🏠</button>
+
+  <!-- Start Screen -->
+  <section id="startScreen" class="fixed inset-0 z-40 grid place-items-center px-4 bg-slate-950/75 text-white">
+    <div class="relative overflow-hidden w-full max-w-3xl rounded-[2rem] glass soft-glow p-6 sm:p-8 scanline">
+      <div class="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-amber-400/20 blur-3xl"></div>
+      <div class="absolute -bottom-24 -left-20 w-72 h-72 rounded-full bg-cyan-400/20 blur-3xl"></div>
+      <div class="relative">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-400/10 border border-cyan-200/30 text-cyan-100 text-sm font-semibold mb-4">
+          <span>Voxel Web Game</span><span class="text-amber-300">Three.js + Tailwind CSS</span>
+        </div>
+        <h1 class="text-3xl sm:text-5xl font-extrabold leading-tight">
+          Data Quest 3D<br><span class="text-amber-300">ภารกิจนักวิทยาการข้อมูล</span>
+        </h1>
+        <p class="mt-4 text-slate-100/90 leading-relaxed text-base sm:text-lg">
+          เดินสำรวจเมืองข้อมูล เก็บคะแนน ตอบคำถามเรื่องวิทยาการข้อมูล และหลบ Data Bug เพื่อสะสมดาวความรู้ให้ครบ 10 ดวง
+        </p>
+
+        <div id="lastScoreBox" class="hidden-ui mt-4 rounded-2xl bg-white/10 border border-white/15 p-4 text-sm text-slate-100"></div>
+
+        <div class="mt-6 grid sm:grid-cols-[1fr_auto] gap-3">
+          <input id="playerInput" type="text" maxlength="24" placeholder="กรอกชื่อผู้เล่น เช่น นักวิทยาการข้อมูล ม.5" class="w-full px-5 py-4 rounded-2xl bg-white/90 text-slate-900 outline-none border-2 border-transparent focus:border-cyan-300 font-semibold" />
+          <button id="startBtn" class="px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold hover:brightness-110 active:scale-95 transition">
+            เริ่มเกม
+          </button>
+        </div>
+
+        <div class="mt-6 grid sm:grid-cols-4 gap-3 text-sm">
+          <div class="rounded-2xl bg-white/10 border border-white/10 p-3"><b class="text-cyan-200">WASD</b><br>เดินสำรวจ</div>
+          <div class="rounded-2xl bg-white/10 border border-white/10 p-3"><b class="text-cyan-200">ลูกศร</b><br>ควบคุมทิศทาง</div>
+          <div class="rounded-2xl bg-white/10 border border-white/10 p-3"><b class="text-cyan-200">คลิกเมาส์</b><br>เดินไปยังจุดที่เลือก</div>
+          <div class="rounded-2xl bg-white/10 border border-white/10 p-3"><b class="text-cyan-200">Touch</b><br>แตะหน้าจอเพื่อเดิน</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Question Modal -->
+  <section id="questionModal" class="hidden-ui fixed inset-0 z-50 grid place-items-center px-4 bg-slate-950/70 text-white">
+    <div class="w-full max-w-3xl rounded-[2rem] glass p-5 sm:p-7">
+      <div class="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <div class="text-sm text-amber-200 font-bold tracking-wide">DATA MISSION</div>
+          <h2 class="text-2xl sm:text-3xl font-extrabold">ภารกิจตอบคำถามวิทยาการข้อมูล</h2>
+        </div>
+        <div class="shrink-0 w-12 h-12 rounded-2xl bg-yellow-300/20 border border-yellow-200/40 grid place-items-center text-2xl">⭐</div>
+      </div>
+      <div id="questionText" class="rounded-2xl bg-white/95 text-slate-900 p-5 font-bold text-lg leading-relaxed"></div>
+      <div id="choicesWrap" class="grid sm:grid-cols-2 gap-3 mt-4"></div>
+      <div id="answerFeedback" class="min-h-[86px] mt-4 rounded-2xl bg-slate-900/65 border border-white/10 p-4 text-slate-100 leading-relaxed"></div>
+    </div>
+  </section>
+
+  <!-- Home Confirm Modal -->
+  <section id="homeModal" class="hidden-ui fixed inset-0 z-50 grid place-items-center px-4 bg-slate-950/70 text-white">
+    <div class="w-full max-w-md rounded-[2rem] glass p-6 text-center">
+      <div class="mx-auto w-16 h-16 rounded-2xl bg-amber-300/20 border border-amber-200/40 grid place-items-center text-3xl mb-4">🏠</div>
+      <h2 class="text-2xl font-extrabold">กลับหน้าหลัก?</h2>
+      <p class="mt-3 text-slate-100/90">คุณต้องการยอมแพ้และกลับหน้าหลักหรือไม่? ระบบจะบันทึกคะแนนปัจจุบันไว้ให้</p>
+      <div class="grid grid-cols-2 gap-3 mt-6">
+        <button id="homeNoBtn" class="py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 font-bold transition">ไม่ เล่นต่อ</button>
+        <button id="homeYesBtn" class="py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold transition">ใช่ กลับหน้าหลัก</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Game Over Modal -->
+  <section id="gameOverModal" class="hidden-ui fixed inset-0 z-50 grid place-items-center px-4 bg-slate-950/80 text-white">
+    <div class="w-full max-w-xl rounded-[2rem] glass p-6 sm:p-8 text-center soft-glow">
+      <div class="mx-auto w-20 h-20 rounded-3xl bg-red-500/20 border border-red-200/40 grid place-items-center text-4xl mb-4">👾</div>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-red-200">โดน Data Bug จับได้!</h2>
+      <p class="mt-3 text-slate-100/90">ลองวางแผนเส้นทาง เก็บ Data Point และตอบคำถามใหม่อีกครั้ง</p>
+      <div class="grid grid-cols-2 gap-3 mt-6 text-left">
+        <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><div class="text-xs text-slate-300">ผู้เล่น</div><div id="overName" class="font-extrabold truncate">-</div></div>
+        <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><div class="text-xs text-slate-300">คะแนนรวม</div><div id="overScore" class="font-extrabold text-2xl text-amber-300">0</div></div>
+        <div class="rounded-2xl bg-white/10 border border-white/10 p-4 col-span-2"><div class="text-xs text-slate-300">ดาวความรู้</div><div id="overStars" class="font-extrabold text-2xl text-yellow-300">0/10</div></div>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3 mt-6">
+        <button id="restartBtn" class="py-3 rounded-2xl bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-950 font-extrabold hover:brightness-110 active:scale-95 transition">เล่นใหม่</button>
+        <button id="backHomeBtn" class="py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 font-bold transition">กลับหน้าหลัก</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Win Modal -->
+  <section id="winModal" class="hidden-ui fixed inset-0 z-50 grid place-items-center px-4 bg-slate-950/80 text-white">
+    <div class="w-full max-w-xl rounded-[2rem] glass p-6 sm:p-8 text-center soft-glow">
+      <div class="mx-auto w-20 h-20 rounded-3xl bg-yellow-300/20 border border-yellow-200/40 grid place-items-center text-4xl mb-4">🏆</div>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-yellow-200">ยินดีด้วย!</h2>
+      <p class="mt-3 text-slate-100/90 text-lg">คุณสำเร็จภารกิจนักวิทยาการข้อมูล และสะสมดาวครบ 10 ดวงแล้ว</p>
+      <div class="mt-6 rounded-2xl bg-white/10 border border-white/10 p-5">
+        <div class="text-sm text-slate-300">คะแนนรวม</div>
+        <div id="winScore" class="text-4xl font-extrabold text-amber-300">0</div>
+      </div>
+      <button id="winHomeBtn" class="mt-6 w-full py-3 rounded-2xl bg-gradient-to-r from-amber-300 to-orange-400 text-slate-950 font-extrabold hover:brightness-110 active:scale-95 transition">เริ่มภารกิจใหม่</button>
+    </div>
+  </section>
+
+  <script>
+    // =========================================================
+    // Data Quest 3D: Single-file HTML Game
+    // Three.js + Tailwind CSS + Web Audio API
+    // =========================================================
+
+    // ---------- DOM ----------
+    const canvas = document.getElementById('gameCanvas');
+    const startScreen = document.getElementById('startScreen');
+    const startBtn = document.getElementById('startBtn');
+    const playerInput = document.getElementById('playerInput');
+    const hud = document.getElementById('hud');
+    const hudName = document.getElementById('hudName');
+    const scoreText = document.getElementById('scoreText');
+    const starsText = document.getElementById('starsText');
+    const homeBtn = document.getElementById('homeBtn');
+    const nameTag = document.getElementById('nameTag');
+    const questionModal = document.getElementById('questionModal');
+    const questionText = document.getElementById('questionText');
+    const choicesWrap = document.getElementById('choicesWrap');
+    const answerFeedback = document.getElementById('answerFeedback');
+    const homeModal = document.getElementById('homeModal');
+    const homeNoBtn = document.getElementById('homeNoBtn');
+    const homeYesBtn = document.getElementById('homeYesBtn');
+    const gameOverModal = document.getElementById('gameOverModal');
+    const overName = document.getElementById('overName');
+    const overScore = document.getElementById('overScore');
+    const overStars = document.getElementById('overStars');
+    const restartBtn = document.getElementById('restartBtn');
+    const backHomeBtn = document.getElementById('backHomeBtn');
+    const winModal = document.getElementById('winModal');
+    const winScore = document.getElementById('winScore');
+    const winHomeBtn = document.getElementById('winHomeBtn');
+    const lastScoreBox = document.getElementById('lastScoreBox');
+
+    // ---------- Game State ----------
+    const WORLD_SIZE = 92;
+    const HALF_WORLD = WORLD_SIZE / 2;
+    const PLAYER_SPEED = 9.2;
+    const ENEMY_SPEED = 2.05;
+    const ENEMY_COUNT = 7;
+    const WIN_STARS = 10;
+
+    let scene, camera, renderer, clock, raycaster, mouse;
+    let player, playerParts = {};
+    let enemies = [];
+    let environment = new THREE.Group();
+    let dataPointBox = null;
+    let questionBox = null;
+    let playerName = 'Data Scientist';
+    let score = 0;
+    let stars = 0;
+    let gameState = 'start'; // start, playing, paused, question, gameover, win
+    let keys = {};
+    let pointerTarget = null;
+    let lastMoveDir = new THREE.Vector3(0, 0, -1);
+    let currentQuestion = null;
+    let questionLocked = false;
+    let audioCtx = null;
+
+    const questionBank = [
+      {
+        q: 'ข้อใดคือความหมายของ “ข้อมูล”',
+        choices: ['ข้อเท็จจริงหรือรายละเอียดที่เก็บรวบรวมได้', 'ข้อสรุปที่ผ่านการวิเคราะห์แล้วเท่านั้น', 'โปรแกรมคอมพิวเตอร์ชนิดหนึ่ง', 'ภาพกราฟิกที่ใช้ตกแต่งรายงาน'],
+        answer: 0,
+        explain: 'ข้อมูลคือข้อเท็จจริงหรือรายละเอียดที่เก็บรวบรวมได้ ก่อนนำไปประมวลผลหรือวิเคราะห์ต่อ'
+      },
+      {
+        q: 'ขั้นตอนแรกของกระบวนการวิทยาการข้อมูลคือข้อใด',
+        choices: ['การนำเสนอข้อมูล', 'การตั้งคำถาม', 'การสร้างกราฟ', 'การลบข้อมูลทั้งหมด'],
+        answer: 1,
+        explain: 'การตั้งคำถามช่วยกำหนดเป้าหมายว่าเราต้องการค้นหาอะไรจากข้อมูล'
+      },
+      {
+        q: 'การทำความสะอาดข้อมูลมีวัตถุประสงค์หลักเพื่ออะไร',
+        choices: ['ทำให้ไฟล์มีสีสวยขึ้น', 'ลดข้อผิดพลาดและทำให้ข้อมูลพร้อมวิเคราะห์', 'เพิ่มจำนวนข้อมูลให้มากที่สุด', 'เปลี่ยนข้อมูลทุกชนิดเป็นรูปภาพ'],
+        answer: 1,
+        explain: 'การทำความสะอาดข้อมูลช่วยแก้ข้อมูลซ้ำ ข้อมูลหาย และข้อมูลผิดรูปแบบ เพื่อให้พร้อมวิเคราะห์'
+      },
+      {
+        q: 'หากต้องการเปรียบเทียบยอดขายแต่ละเดือน ควรใช้กราฟชนิดใดมากที่สุด',
+        choices: ['กราฟแท่ง', 'แผนที่โลก', 'แผนภาพวงจรไฟฟ้า', 'ภาพวาดอิสระ'],
+        answer: 0,
+        explain: 'กราฟแท่งเหมาะสำหรับเปรียบเทียบปริมาณระหว่างกลุ่มหรือช่วงเวลา เช่น ยอดขายแต่ละเดือน'
+      },
+      {
+        q: 'ข้อใดเป็นตัวอย่างของข้อมูลเชิงปริมาณ',
+        choices: ['สีที่นักเรียนชอบ', 'ความคิดเห็นต่อกิจกรรม', 'คะแนนสอบ', 'ประเภทอาหารที่ชอบ'],
+        answer: 2,
+        explain: 'คะแนนสอบเป็นตัวเลขที่นำไปคำนวณทางสถิติได้ จึงเป็นข้อมูลเชิงปริมาณ'
+      },
+      {
+        q: 'ข้อใดเป็นข้อมูลเชิงคุณภาพ',
+        choices: ['อายุ', 'น้ำหนัก', 'รายได้', 'ประเภทอาชีพ'],
+        answer: 3,
+        explain: 'ประเภทอาชีพเป็นข้อมูลแบบจัดกลุ่มหรือบรรยายลักษณะ จึงเป็นข้อมูลเชิงคุณภาพ'
+      },
+      {
+        q: 'การสำรวจข้อมูลเบื้องต้นช่วยให้เราทำอะไรได้',
+        choices: ['เข้าใจลักษณะ แนวโน้ม และความผิดปกติของข้อมูล', 'ลบข้อมูลทั้งหมดก่อนวิเคราะห์', 'ทำให้ไม่ต้องตั้งคำถาม', 'เปลี่ยนข้อมูลเป็นเกมอัตโนมัติ'],
+        answer: 0,
+        explain: 'การสำรวจข้อมูลช่วยให้เห็นรูปแบบ แนวโน้ม ค่าผิดปกติ และคุณภาพของข้อมูลก่อนวิเคราะห์จริง'
+      },
+      {
+        q: 'เพราะเหตุใดจึงต้องคำนึงถึงจริยธรรมในการใช้ข้อมูล',
+        choices: ['เพื่อให้กราฟมีสีสันมากขึ้น', 'เพื่อปกป้องความเป็นส่วนตัวและไม่ใช้ข้อมูลในทางที่ผิด', 'เพื่อให้ข้อมูลมีขนาดเล็กลง', 'เพื่อหลีกเลี่ยงการใช้คอมพิวเตอร์'],
+        answer: 1,
+        explain: 'การใช้ข้อมูลต้องเคารพความเป็นส่วนตัว ความปลอดภัย และไม่สร้างความเสียหายแก่ผู้อื่น'
+      },
+      {
+        q: 'ข้อใดคือผลลัพธ์ที่ดีของการวิเคราะห์ข้อมูล',
+        choices: ['ได้ข้อค้นพบที่ช่วยตัดสินใจได้ดีขึ้น', 'ได้ไฟล์ที่มีขนาดใหญ่ขึ้น', 'ได้รูปภาพจำนวนมากโดยไม่มีความหมาย', 'ได้ข้อมูลที่ไม่เกี่ยวข้องกับปัญหา'],
+        answer: 0,
+        explain: 'การวิเคราะห์ข้อมูลที่ดีควรนำไปสู่ข้อค้นพบหรือสารสนเทศที่ช่วยตัดสินใจได้'
+      },
+      {
+        q: 'การสื่อสารข้อมูลด้วยภาพมีประโยชน์อย่างไร',
+        choices: ['ช่วยให้เข้าใจข้อมูลและข้อค้นพบได้ง่ายขึ้น', 'ทำให้ข้อมูลหายไปจากระบบ', 'ทำให้ไม่ต้องวิเคราะห์ข้อมูล', 'ใช้แทนการเก็บรวบรวมข้อมูลทั้งหมด'],
+        answer: 0,
+        explain: 'การนำเสนอข้อมูลด้วยภาพช่วยให้ผู้ชมเห็นรูปแบบและข้อค้นพบได้รวดเร็วและชัดเจน'
+      },
+      {
+        q: 'ตัวอย่างคำถามใดเหมาะกับการเริ่มโครงงานวิทยาการข้อมูลมากที่สุด',
+        choices: ['จะทำให้รูปสวยอย่างไร', 'นักเรียนมาโรงเรียนสายเพราะสาเหตุใดและลดได้อย่างไร', 'จะลบข้อมูลทั้งหมดได้อย่างไร', 'จะเปลี่ยนคะแนนทุกคนให้เท่ากันได้อย่างไร'],
+        answer: 1,
+        explain: 'คำถามที่ดีควรมีปัญหาชัดเจน สามารถเก็บข้อมูลและนำไปวิเคราะห์เพื่อปรับปรุงได้'
+      },
+      {
+        q: 'ข้อมูลที่ขาดหายไปในตารางเรียกว่าอะไร',
+        choices: ['Missing Value', 'Data Tower', 'Voxel Value', 'Sunset Data'],
+        answer: 0,
+        explain: 'Missing Value คือค่าที่ขาดหายไปในชุดข้อมูล และควรจัดการก่อนวิเคราะห์'
+      }
+    ];
+
+    // ---------- Utility ----------
+    function show(el) { el.classList.remove('hidden-ui'); }
+    function hide(el) { el.classList.add('hidden-ui'); }
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function rand(min, max) { return min + Math.random() * (max - min); }
+    function distanceXZ(a, b) {
+      const dx = a.x - b.x;
+      const dz = a.z - b.z;
+      return Math.sqrt(dx * dx + dz * dz);
+    }
+    function randomXZ(minDistanceFromPlayer = 8) {
+      let x, z, attempt = 0;
+      do {
+        x = rand(-HALF_WORLD + 5, HALF_WORLD - 5);
+        z = rand(-HALF_WORLD + 5, HALF_WORLD - 5);
+        attempt++;
+      } while (player && distanceXZ(new THREE.Vector3(x, 0, z), player.position) < minDistanceFromPlayer && attempt < 80);
+      return new THREE.Vector3(x, 0, z);
+    }
+
+    // ---------- Audio: Web Audio API Synthesizer ----------
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function tone(freq, start, duration, type = 'sine', gain = 0.045) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now + start);
+      g.gain.setValueAtTime(0.0001, now + start);
+      g.gain.exponentialRampToValueAtTime(gain, now + start + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+      osc.connect(g);
+      g.connect(audioCtx.destination);
+      osc.start(now + start);
+      osc.stop(now + start + duration + 0.04);
+    }
+    function sfx(name) {
+      ensureAudio();
+      if (name === 'start') { tone(440, 0, .12, 'sine'); tone(660, .10, .14, 'triangle'); tone(880, .22, .16, 'sine'); }
+      if (name === 'point') { tone(880, 0, .08, 'square', .035); tone(1320, .07, .10, 'sine', .03); }
+      if (name === 'mission') { tone(520, 0, .10, 'triangle'); tone(780, .11, .14, 'triangle'); }
+      if (name === 'correct') { tone(880, 0, .10, 'sine'); tone(1175, .09, .12, 'sine'); tone(1760, .21, .20, 'triangle', .035); }
+      if (name === 'wrong') { tone(260, 0, .20, 'sawtooth', .035); tone(180, .18, .25, 'sawtooth', .03); }
+      if (name === 'gameover') { tone(220, 0, .18, 'sawtooth'); tone(160, .16, .22, 'sawtooth'); tone(110, .36, .32, 'sine'); }
+    }
+
+    // ---------- Three.js Setup ----------
+    function initThree() {
+      scene = new THREE.Scene();
+      scene.background = makeSunsetTexture();
+      scene.fog = new THREE.Fog(0xd78554, 28, 96);
+
+      camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 220);
+      camera.position.set(0, 9, 13);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      clock = new THREE.Clock();
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      createLights();
+      createWorld();
+      createPlayer();
+      spawnDataPoint();
+      spawnQuestionBox();
+      spawnEnemies();
+
+      window.addEventListener('resize', onResize);
+      window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; pointerTarget = null; });
+      window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+      renderer.domElement.addEventListener('pointerdown', onPointerDown, { passive: true });
+
+      animate();
+    }
+
+    function makeSunsetTexture() {
+      const c = document.createElement('canvas');
+      c.width = 32; c.height = 256;
+      const ctx = c.getContext('2d');
+      const g = ctx.createLinearGradient(0, 0, 0, 256);
+      g.addColorStop(0, '#34205f');
+      g.addColorStop(0.38, '#ba5d62');
+      g.addColorStop(0.72, '#ff9d4d');
+      g.addColorStop(1, '#ffd08a');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, c.width, c.height);
+      const tex = new THREE.CanvasTexture(c);
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      return tex;
+    }
+
+    function createLights() {
+      const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+      scene.add(ambient);
+
+      const sun = new THREE.DirectionalLight(0xffd39a, 1.15);
+      sun.position.set(-18, 32, 18);
+      sun.castShadow = true;
+      sun.shadow.mapSize.width = 2048;
+      sun.shadow.mapSize.height = 2048;
+      sun.shadow.camera.near = 1;
+      sun.shadow.camera.far = 90;
+      sun.shadow.camera.left = -50;
+      sun.shadow.camera.right = 50;
+      sun.shadow.camera.top = 50;
+      sun.shadow.camera.bottom = -50;
+      scene.add(sun);
+
+      const rim = new THREE.DirectionalLight(0x66d9ff, 0.35);
+      rim.position.set(28, 14, -25);
+      scene.add(rim);
+    }
+
+    function mat(color, rough = 0.85, metal = 0.02, emissive = 0x000000, emissiveIntensity = 0) {
+      return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, emissive, emissiveIntensity });
+    }
+
+    function cube(w, h, d, material, x = 0, y = 0, z = 0, cast = true, receive = true) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+      return mesh;
+    }
+
+    function createWorld() {
+      scene.add(environment);
+
+      const groundMat = mat(0x176b5d);
+      const ground = cube(WORLD_SIZE, 0.45, WORLD_SIZE, groundMat, 0, -0.25, 0, false, true);
+      environment.add(ground);
+
+      const grid = new THREE.GridHelper(WORLD_SIZE, 46, 0x6ee7b7, 0x115e59);
+      grid.position.y = 0.03;
+      grid.material.opacity = 0.22;
+      grid.material.transparent = true;
+      environment.add(grid);
+
+      // Data roads / process paths
+      const roadMat = mat(0x0f3d48);
+      environment.add(cube(WORLD_SIZE, 0.05, 2.2, roadMat, 0, 0.05, 0, false, true));
+      environment.add(cube(2.2, 0.05, WORLD_SIZE, roadMat, 0, 0.06, 0, false, true));
+
+      createBuildings(34);
+      createTrees(46);
+      createDataTowers(24);
+      createProcessMarkers();
+    }
+
+    function createBuildings(count) {
+      const colors = [0x263238, 0x3e2723, 0x334155, 0x1e3a5f, 0x4a3428];
+      for (let i = 0; i < count; i++) {
+        const p = randomXZ(12);
+        if (Math.abs(p.x) < 9 && Math.abs(p.z) < 9) continue;
+        const w = rand(2.2, 5.0);
+        const d = rand(2.2, 5.0);
+        const h = rand(2.5, 10.5);
+        const material = mat(colors[Math.floor(Math.random() * colors.length)]);
+        const b = cube(w, h, d, material, p.x, h / 2, p.z);
+        environment.add(b);
+
+        // small light windows as voxel pixels
+        const windowMat = mat(0x38bdf8, .5, .1, 0x38bdf8, 0.35);
+        const rows = Math.floor(h / 1.4);
+        for (let r = 0; r < rows; r++) {
+          if (Math.random() < 0.45) continue;
+          const wx = cube(0.18, 0.22, 0.06, windowMat, p.x - w / 2 - 0.035, 0.9 + r * 1.1, p.z + rand(-d / 2 + .45, d / 2 - .45), false, false);
+          environment.add(wx);
+        }
+      }
+    }
+
+    function createTrees(count) {
+      const trunkMat = mat(0x6b3f21);
+      const leafMat = mat(0x14532d);
+      const leafMat2 = mat(0x166534);
+      for (let i = 0; i < count; i++) {
+        const p = randomXZ(10);
+        if (Math.abs(p.x) < 7 && Math.abs(p.z) < 7) continue;
+        const trunk = cube(0.45, 1.4, 0.45, trunkMat, p.x, 0.7, p.z);
+        const leaves = cube(1.45, 1.25, 1.45, Math.random() > .5 ? leafMat : leafMat2, p.x, 1.85, p.z);
+        const top = cube(1.05, .9, 1.05, leafMat2, p.x, 2.65, p.z);
+        environment.add(trunk, leaves, top);
+      }
+    }
+
+    function createDataTowers(count) {
+      const towerMat = mat(0x0ea5e9, .45, .08, 0x0ea5e9, 0.55);
+      for (let i = 0; i < count; i++) {
+        const p = randomXZ(12);
+        if (Math.abs(p.x) < 8 && Math.abs(p.z) < 8) continue;
+        const h = rand(1.4, 4.5);
+        const t = cube(0.35, h, 0.35, towerMat, p.x, h / 2, p.z, true, false);
+        environment.add(t);
+      }
+    }
+
+    function createProcessMarkers() {
+      const labels = ['ตั้งคำถาม', 'รวบรวม', 'ทำความสะอาด', 'วิเคราะห์', 'นำเสนอ'];
+      const colors = [0xfacc15, 0x38bdf8, 0x22c55e, 0xa78bfa, 0xfb923c];
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const x = Math.cos(angle) * 18;
+        const z = Math.sin(angle) * 18;
+        const post = cube(0.55, 2.2, 0.55, mat(colors[i], .6, .05, colors[i], .25), x, 1.1, z);
+        environment.add(post);
+        const board = cube(2.2, 0.65, 0.18, mat(0x0f172a), x, 2.55, z);
+        board.lookAt(new THREE.Vector3(0, 2.55, 0));
+        environment.add(board);
+        // Text labels in 3D would need a font loader; the marker color instead represents the 5 process stages.
+      }
+    }
+
+    // ---------- Player ----------
+    function createPlayer() {
+      player = new THREE.Group();
+      player.position.set(0, 0, 0);
+      scene.add(player);
+
+      const skin = mat(0xf2c29b);
+      const shirt = mat(0x0284c7);
+      const dark = mat(0x0f172a);
+      const pants = mat(0x1d4ed8);
+      const bag = mat(0x1e293b);
+      const white = mat(0xf8fafc);
+
+      playerParts.head = cube(0.85, 0.85, 0.85, skin, 0, 2.72, 0);
+      playerParts.hair = cube(0.9, 0.22, 0.9, dark, 0, 3.25, 0);
+      playerParts.body = cube(0.95, 1.25, 0.58, shirt, 0, 1.72, 0);
+      playerParts.badge = cube(0.22, 0.18, 0.04, white, -0.22, 1.92, -0.32, false, false);
+      playerParts.leftArm = cube(0.28, 1.1, 0.32, skin, -0.77, 1.68, 0);
+      playerParts.rightArm = cube(0.28, 1.1, 0.32, skin, 0.77, 1.68, 0);
+      playerParts.leftLeg = cube(0.34, 1.05, 0.34, pants, -0.25, 0.58, 0);
+      playerParts.rightLeg = cube(0.34, 1.05, 0.34, pants, 0.25, 0.58, 0);
+      playerParts.backpack = cube(0.9, 0.95, 0.22, bag, 0, 1.68, 0.42);
+
+      Object.values(playerParts).forEach(part => player.add(part));
+    }
+
+    function updatePlayer(delta, t) {
+      if (gameState !== 'playing') return;
+
+      const dir = new THREE.Vector3();
+      const forward = (keys['w'] || keys['arrowup']);
+      const back = (keys['s'] || keys['arrowdown']);
+      const left = (keys['a'] || keys['arrowleft']);
+      const right = (keys['d'] || keys['arrowright']);
+
+      if (forward) dir.z -= 1;
+      if (back) dir.z += 1;
+      if (left) dir.x -= 1;
+      if (right) dir.x += 1;
+
+      let moving = false;
+
+      if (dir.lengthSq() > 0) {
+        dir.normalize();
+        player.position.addScaledVector(dir, PLAYER_SPEED * delta);
+        lastMoveDir.copy(dir);
+        moving = true;
+      } else if (pointerTarget) {
+        const toTarget = pointerTarget.clone().sub(player.position);
+        toTarget.y = 0;
+        const dist = toTarget.length();
+        if (dist > 0.35) {
+          toTarget.normalize();
+          player.position.addScaledVector(toTarget, PLAYER_SPEED * delta);
+          lastMoveDir.copy(toTarget);
+          moving = true;
+        } else {
+          pointerTarget = null;
+        }
+      }
+
+      player.position.x = clamp(player.position.x, -HALF_WORLD + 2, HALF_WORLD - 2);
+      player.position.z = clamp(player.position.z, -HALF_WORLD + 2, HALF_WORLD - 2);
+
+      if (moving) {
+        // Model front is the local -Z side; rotate that side toward the movement direction.
+        const targetRot = Math.atan2(-lastMoveDir.x, -lastMoveDir.z);
+        player.rotation.y = targetRot;
+        const swing = Math.sin(t * 9.5) * 0.58;
+        playerParts.leftArm.rotation.x = swing;
+        playerParts.rightArm.rotation.x = -swing;
+        playerParts.leftLeg.rotation.x = -swing;
+        playerParts.rightLeg.rotation.x = swing;
+      } else {
+        ['leftArm','rightArm','leftLeg','rightLeg'].forEach(k => {
+          playerParts[k].rotation.x += (0 - playerParts[k].rotation.x) * 0.18;
+        });
+      }
+    }
+
+    // ---------- Items ----------
+    function createFloatingBox(color, emissiveColor, labelType) {
+      const group = new THREE.Group();
+      const material = mat(color, .5, .05, emissiveColor, .22);
+      const main = cube(1.05, 1.05, 1.05, material, 0, 1.15, 0);
+      const cap = cube(1.32, .18, 1.32, mat(0xffffff, .55, .03, emissiveColor, .12), 0, 1.78, 0, true, false);
+      group.add(main, cap);
+      group.userData.type = labelType;
+      scene.add(group);
+      return group;
+    }
+
+    function spawnDataPoint() {
+      if (!dataPointBox) dataPointBox = createFloatingBox(0xf97316, 0xf97316, 'dataPoint');
+      const p = randomXZ(9);
+      dataPointBox.position.set(p.x, 0, p.z);
+      dataPointBox.visible = true;
+    }
+
+    function spawnQuestionBox() {
+      if (!questionBox) questionBox = createFloatingBox(0xfacc15, 0xfacc15, 'question');
+      const p = randomXZ(10);
+      questionBox.position.set(p.x, 0, p.z);
+      questionBox.visible = true;
+    }
+
+    // ---------- Enemies ----------
+    function spawnEnemies() {
+      enemies.forEach(e => scene.remove(e));
+      enemies = [];
+      for (let i = 0; i < ENEMY_COUNT; i++) {
+        const enemy = new THREE.Group();
+        const body = cube(1.25, 1.25, 1.25, mat(0x050505), 0, 0.72, 0);
+        const eyeMat = mat(0xff0000, .4, .1, 0xff0000, 1.2);
+        const leftEye = cube(0.22, 0.18, 0.08, eyeMat, -0.28, 0.88, -0.66, false, false);
+        const rightEye = cube(0.22, 0.18, 0.08, eyeMat, 0.28, 0.88, -0.66, false, false);
+        const antenna = cube(0.18, .55, .18, eyeMat, 0, 1.62, 0, true, false);
+        enemy.add(body, leftEye, rightEye, antenna);
+        const p = randomXZ(24);
+        enemy.position.set(p.x, 0, p.z);
+        enemy.userData.offset = Math.random() * Math.PI * 2;
+        scene.add(enemy);
+        enemies.push(enemy);
+      }
+    }
+
+    function updateEnemies(delta, t) {
+      if (gameState !== 'playing') return;
+      enemies.forEach((enemy) => {
+        const dir = player.position.clone().sub(enemy.position);
+        dir.y = 0;
+        const d = dir.length();
+        if (d > 0.1) {
+          dir.normalize();
+          enemy.position.addScaledVector(dir, ENEMY_SPEED * delta);
+          enemy.rotation.y = Math.atan2(-dir.x, -dir.z);
+        }
+        enemy.position.y = Math.sin(t * 3 + enemy.userData.offset) * 0.08;
+      });
+    }
+
+    // ---------- Input ----------
+    function onPointerDown(event) {
+      if (gameState !== 'playing') return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const point = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(plane, point)) {
+        point.x = clamp(point.x, -HALF_WORLD + 2, HALF_WORLD - 2);
+        point.z = clamp(point.z, -HALF_WORLD + 2, HALF_WORLD - 2);
+        point.y = 0;
+        pointerTarget = point;
+      }
+    }
+
+    // ---------- Collision ----------
+    function checkCollisions() {
+      if (gameState !== 'playing') return;
+
+      if (dataPointBox && dataPointBox.visible && distanceXZ(player.position, dataPointBox.position) < 1.55) {
+        score += 10;
+        updateHUD();
+        sfx('point');
+        spawnDataPoint();
+      }
+
+      if (questionBox && questionBox.visible && distanceXZ(player.position, questionBox.position) < 1.65) {
+        questionBox.visible = false;
+        sfx('mission');
+        openQuestion();
+        return;
+      }
+
+      for (const enemy of enemies) {
+        if (distanceXZ(player.position, enemy.position) < 1.12) {
+          triggerGameOver();
+          return;
+        }
+      }
+    }
+
+    // ---------- Questions ----------
+    function openQuestion() {
+      if (gameState !== 'playing') return;
+      gameState = 'question';
+      pointerTarget = null;
+      questionLocked = false;
+      currentQuestion = questionBank[Math.floor(Math.random() * questionBank.length)];
+      questionText.textContent = currentQuestion.q;
+      choicesWrap.innerHTML = '';
+      answerFeedback.innerHTML = '<span class="text-slate-200">เลือกคำตอบที่ถูกต้อง ระบบจะเฉลยและกลับเข้าเกมภายใน 2 วินาทีหลังตอบ</span>';
+
+      currentQuestion.choices.forEach((choice, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn text-left rounded-2xl bg-white/95 hover:bg-cyan-50 text-slate-900 border-2 border-transparent p-4 font-bold leading-relaxed transition active:scale-[0.99]';
+        btn.innerHTML = `<span class="inline-grid place-items-center w-8 h-8 rounded-xl bg-slate-900 text-white mr-2 font-extrabold">${['ก','ข','ค','ง'][index]}</span>${choice}`;
+        btn.addEventListener('click', () => answerQuestion(index));
+        choicesWrap.appendChild(btn);
+      });
+      show(questionModal);
+    }
+
+    function answerQuestion(selectedIndex) {
+      if (questionLocked || !currentQuestion) return;
+      questionLocked = true;
+      const buttons = [...choicesWrap.querySelectorAll('button')];
+      buttons.forEach(btn => btn.disabled = true);
+
+      const correct = currentQuestion.answer;
+      const isCorrect = selectedIndex === correct;
+
+      if (isCorrect) {
+        stars += 1;
+        score += 50;
+        sfx('correct');
+        buttons[correct].style.background = '#22c55e';
+        buttons[correct].style.color = '#ffffff';
+        buttons[correct].style.borderColor = '#bbf7d0';
+        answerFeedback.innerHTML = `<div class="font-extrabold text-green-200 text-lg">ตอบถูก! คุณได้รับ 1 ดาวความรู้ และ +50 คะแนน</div><div class="mt-2 text-slate-100">${currentQuestion.explain}</div>`;
+      } else {
+        sfx('wrong');
+        buttons[selectedIndex].style.background = '#ef4444';
+        buttons[selectedIndex].style.color = '#ffffff';
+        buttons[selectedIndex].style.borderColor = '#fecaca';
+        buttons[correct].style.background = '#22c55e';
+        buttons[correct].style.color = '#ffffff';
+        buttons[correct].style.borderColor = '#bbf7d0';
+        answerFeedback.innerHTML = `<div class="font-extrabold text-red-200 text-lg">ยังไม่ถูกต้อง เฉลยคือข้อ ${['ก','ข','ค','ง'][correct]}</div><div class="mt-2 text-slate-100">${currentQuestion.explain}</div>`;
+      }
+
+      updateHUD();
+      setTimeout(() => {
+        hide(questionModal);
+        currentQuestion = null;
+        spawnQuestionBox();
+        if (stars >= WIN_STARS) {
+          triggerWin();
+        } else if (gameState === 'question') {
+          gameState = 'playing';
+        }
+      }, 2000);
+    }
+
+    // ---------- UI Flow ----------
+    function startGame() {
+      ensureAudio();
+      playerName = playerInput.value.trim() || 'Data Scientist';
+      sfx('start');
+      resetGame();
+      hide(startScreen);
+      hide(gameOverModal);
+      hide(winModal);
+      hide(homeModal);
+      show(hud);
+      show(homeBtn);
+      show(nameTag);
+      gameState = 'playing';
+    }
+
+    function resetGame() {
+      score = 0;
+      stars = 0;
+      pointerTarget = null;
+      keys = {};
+      if (player) {
+        player.position.set(0, 0, 0);
+        player.rotation.set(0, 0, 0);
+      }
+      lastMoveDir.set(0, 0, -1);
+      spawnDataPoint();
+      spawnQuestionBox();
+      spawnEnemies();
+      updateHUD();
+    }
+
+    function updateHUD() {
+      hudName.textContent = playerName;
+      nameTag.textContent = playerName;
+      scoreText.textContent = score;
+      starsText.textContent = `${stars}/${WIN_STARS}`;
+    }
+
+    function triggerGameOver() {
+      if (gameState === 'gameover') return;
+      gameState = 'gameover';
+      pointerTarget = null;
+      sfx('gameover');
+      overName.textContent = playerName;
+      overScore.textContent = score;
+      overStars.textContent = `${stars}/${WIN_STARS}`;
+      saveLastScore('gameover');
+      show(gameOverModal);
+    }
+
+    function triggerWin() {
+      gameState = 'win';
+      pointerTarget = null;
+      winScore.textContent = score;
+      saveLastScore('win');
+      show(winModal);
+    }
+
+    function saveLastScore(result) {
+      const data = { playerName, score, stars, result, time: new Date().toLocaleString('th-TH') };
+      try { localStorage.setItem('dataQuestLastScore', JSON.stringify(data)); } catch (e) {}
+      renderLastScore();
+    }
+
+    function renderLastScore() {
+      try {
+        const raw = localStorage.getItem('dataQuestLastScore');
+        if (!raw) return hide(lastScoreBox);
+        const data = JSON.parse(raw);
+        lastScoreBox.innerHTML = `<b>คะแนนล่าสุด:</b> ${data.playerName} ได้ ${data.score} คะแนน | ดาว ${data.stars}/${WIN_STARS} | ${data.time}`;
+        show(lastScoreBox);
+      } catch (e) { hide(lastScoreBox); }
+    }
+
+    function returnHome(save = false) {
+      if (save) saveLastScore('home');
+      gameState = 'start';
+      pointerTarget = null;
+      hide(hud);
+      hide(homeBtn);
+      hide(nameTag);
+      hide(questionModal);
+      hide(gameOverModal);
+      hide(homeModal);
+      hide(winModal);
+      show(startScreen);
+      renderLastScore();
+    }
+
+    startBtn.addEventListener('click', startGame);
+    playerInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(); });
+    restartBtn.addEventListener('click', () => {
+      hide(gameOverModal);
+      resetGame();
+      show(hud); show(homeBtn); show(nameTag);
+      gameState = 'playing';
+      sfx('start');
+    });
+    backHomeBtn.addEventListener('click', () => returnHome(false));
+    winHomeBtn.addEventListener('click', () => returnHome(false));
+
+    homeBtn.addEventListener('click', () => {
+      if (gameState !== 'playing') return;
+      gameState = 'paused';
+      pointerTarget = null;
+      show(homeModal);
+    });
+    homeNoBtn.addEventListener('click', () => {
+      if (gameState !== 'paused') return;
+      hide(homeModal);
+      gameState = 'playing';
+    });
+    homeYesBtn.addEventListener('click', () => returnHome(true));
+
+    // ---------- Camera / Tag / Animation Loop ----------
+    function updateCamera() {
+      if (!player) return;
+      const behind = lastMoveDir.clone().normalize().multiplyScalar(-10.5);
+      const desired = new THREE.Vector3(player.position.x + behind.x, 7.6, player.position.z + behind.z);
+      camera.position.lerp(desired, 0.075);
+      const lookAt = new THREE.Vector3(player.position.x, 1.65, player.position.z);
+      camera.lookAt(lookAt);
+    }
+
+    function updateNameTag() {
+      if (!player || gameState === 'start') return;
+      const pos = player.position.clone();
+      pos.y += 3.75;
+      pos.project(camera);
+      const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+      if (pos.z < 1) {
+        nameTag.style.left = `${x}px`;
+        nameTag.style.top = `${y}px`;
+        show(nameTag);
+      } else {
+        hide(nameTag);
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = Math.min(clock.getDelta(), 0.033);
+      const t = clock.elapsedTime;
+
+      if (dataPointBox) {
+        dataPointBox.rotation.y += delta * 1.9;
+        dataPointBox.rotation.x = Math.sin(t * 2) * 0.15;
+        dataPointBox.position.y = Math.sin(t * 2.2) * 0.18;
+      }
+      if (questionBox) {
+        questionBox.rotation.y -= delta * 1.55;
+        questionBox.rotation.z = Math.sin(t * 1.7) * 0.12;
+        questionBox.position.y = Math.sin(t * 2.0 + 1.3) * 0.2;
+      }
+
+      updatePlayer(delta, t);
+      updateEnemies(delta, t);
+      checkCollisions();
+      updateCamera();
+      updateNameTag();
+      renderer.render(scene, camera);
+    }
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    }
+
+    // ---------- Boot ----------
+    initThree();
+    renderLastScore();
+  </script>
+</body>
+</html>

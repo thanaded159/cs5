@@ -1107,4 +1107,13 @@
       if (document.hidden && !$("game-view").classList.contains("hidden")) state.paused=true;
     });
 
-    document.addEventListener("keydo
+    document.addEventListener("keydown",e=>{
+      if (e.key==="Escape" && !$("modal-layer").classList.contains("hidden")) closeModal(true);
+      if (e.key.toLowerCase()==="h" && !$("game-view").classList.contains("hidden")) useHint();
+    });
+
+    updateSoundButtons();
+    if (window.lucide) lucide.createIcons();
+  </script>
+ 
+</body></html>

@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>ภารกิจพิชิตพีระมิด DIKW | DATA's DIKW Sorting Quest</title>
+<style>
+/* ===================== 1. RESET & พื้นฐาน ===================== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:'Segoe UI','Sarabun',sans-serif;
+  background:linear-gradient(160deg,#0b1026 0%,#1a1044 40%,#0e1c3f 70%,#150a30 100%);
+  color:#e6f1ff;
+  position:relative;
+  height:100vh;width:100vw;
+}
+button{font-family:inherit;cursor:pointer;}
+button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, input:focus-visible{
+  outline:3px solid #7dfcff;outline-offset:2px;
+}
+#bgCanvas,#fxCanvas,#arVideoCanvas,#arCursorCanvas{
+  position:fixed;top:0;left:0;pointer-events:none;
+}
+#bgCanvas{z-index:0;}
+#arVideoCanvas{z-index:1;opacity:.28;}
+#fxCanvas{z-index:40;}
+#arCursorCanvas{z-index:60;}
+
+/* ===================== 2. SCREENS ===================== */
+.screen{display:none;position:relative;z-index:5;height:100vh;width:100vw;overflow-y:auto;}
+.screen.active{display:block;}
+
+.glass{
+  background:rgba(255,255,255,0.06);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(157,206,255,0.25);
+  border-radius:18px;
+  box-shadow:0 0 24px rgba(80,120,255,0.15);
+}
+
+/* ---- ปุ่มมาตรฐาน ---- */
+.btn-primary,.btn-secondary{
+  padding:12px 22px;border-radius:12px;border:none;font-size:16px;font-weight:600;
+  transition:transform .15s, box-shadow .15s; min-height:44px;
+}
+.btn-primary{
+  background:linear-gradient(135deg,#38bdf8,#a855f7);color:#fff;
+  box-shadow:0 0 16px rgba(168,85,247,.5);
+}
+.btn-primary:hover{transform:translateY(-2px);}
+.btn-secondary{
+  background:rgba(255,255,255,0.1);color:#e6f1ff;border:1px solid rgba(157,206,255,.4);
+}
+.btn-secondary:hover{background:rgba(255,255,255,0.18);}
+.icon-btn{
+  width:44px;height:44px;border-radius:50%;border:1px solid rgba(157,206,255,.4);
+  background:rgba(255,255,255,0.08);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;
+}
+
+/* ===================== 3. หน้าเริ่มต้น ===================== */
+#startScreen{display:flex;align-items:center;justify-content:center;padding:20px;}
+.start-wrap{max-width:900px;width:100%;padding:32px;text-align:center;}
+.game-title-th{font-size:clamp(24px,5vw,38px);font-weight:800;background:linear-gradient(90deg,#7dd3fc,#c084fc,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.game-title-en{font-size:clamp(13px,2vw,16px);color:#9db8ff;letter-spacing:1px;margin-bottom:14px;}
+.data-svg{width:110px;filter:drop-shadow(0 0 12px #38bdf8);}
+.start-desc{font-size:15px;color:#cfe3ff;margin:14px 0;line-height:1.7;}
+.objectives{text-align:left;font-size:14px;color:#d7e6ff;background:rgba(255,255,255,.05);border-radius:12px;padding:14px 18px;margin:14px 0;line-height:1.8;}
+#nameInput{
+  width:100%;max-width:320px;padding:12px 16px;border-radius:12px;border:1px solid rgba(157,206,255,.4);
+  background:rgba(255,255,255,.08);color:#fff;font-size:15px;margin:10px 0;
+}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px;}
+.high-score-tag{font-size:13px;color:#ffd166;margin-top:8px;}
+#arFallbackBox{display:none;margin-top:14px;padding:12px;border-radius:12px;background:rgba(255,80,80,.12);border:1px solid rgba(255,120,120,.4);font-size:14px;}
+
+/* ===================== 4. MODAL ===================== */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(5,8,20,.75);z-index:100;
+  align-items:center;justify-content:center;padding:16px;
+}
+.modal-overlay.open{display:flex;}
+.modal-box{max-width:680px;width:100%;max-height:85vh;overflow-y:auto;padding:26px;}
+.modal-box h2{color:#7dd3fc;margin-bottom:12px;}
+.modal-box table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px;}
+.modal-box th,.modal-box td{border:1px solid rgba(157,206,255,.3);padding:8px;text-align:left;}
+.modal-box th{background:rgba(125,211,252,.15);}
+.modal-close{margin-top:16px;}
+
+/* ===================== 5. หน้าจอเกม ===================== */
+#gameScreen{display:flex;flex-direction:column;height:100vh;}
+.hud{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  padding:10px 16px;z-index:20;position:relative;font-size:14px;
+}
+.hud-left,.hud-mid,.hud-right{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+.hud-chip{background:rgba(255,255,255,.08);border-radius:10px;padding:6px 12px;border:1px solid rgba(157,206,255,.25);}
+#hudEnergy{display:flex;gap:3px;}
+.energy-icon{font-size:18px;}
+.energy-icon.full{color:#4ade80;text-shadow:0 0 8px #4ade80;}
+.energy-icon.empty{color:#3a3a55;}
+#hudTimer{background:rgba(56,189,248,.15);}
+#hudTimer.urgent{background:rgba(239,68,68,.3);color:#fecaca;animation:pulseSlow 1s infinite;}
+@keyframes pulseSlow{0%,100%{opacity:1;}50%{opacity:.6;}}
+
+.game-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:8px 16px 20px;position:relative;overflow:hidden;}
+
+.data-corner{position:absolute;left:14px;bottom:14px;width:80px;z-index:15;filter:drop-shadow(0 0 10px #38bdf8);}
+#dataHintBubble{
+  display:none;position:absolute;left:100px;bottom:20px;max-width:260px;background:rgba(15,20,45,.92);
+  border:1px solid #7dd3fc;border-radius:12px;padding:10px 14px;font-size:13px;z-index:16;
+}
+
+.card-stage{position:relative;width:100%;max-width:480px;height:150px;display:flex;align-items:center;justify-content:center;margin:10px auto;}
+.holo-card{
+  position:relative;width:min(92vw,420px);min-height:130px;padding:20px;border-radius:16px;
+  background:linear-gradient(135deg,rgba(56,189,248,.18),rgba(168,85,247,.18));
+  border:1.5px solid rgba(196,225,255,.5);
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  box-shadow:0 0 26px rgba(125,211,252,.35);
+  overflow:hidden;touch-action:none;user-select:none;transition:box-shadow .2s;
+}
+.holo-card.selected{box-shadow:0 0 34px #ffe600;border-color:#ffe600;}
+.holo-card.dragging{opacity:.9;}
+.holo-shine{position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.25) 50%,transparent 70%);background-size:220% 220%;animation:shine 4s linear infinite;}
+@keyframes shine{0%{background-position:-100% -100%;}100%{background-position:100% 100%;}}
+.holo-card p{position:relative;z-index:2;font-size:15px;line-height:1.6;color:#f2f8ff;}
+.holo-card.shake{animation:shake .45s;}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-8px);}75%{transform:translateX(8px);}}
+
+.pyramid{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;max-width:460px;margin-bottom:6px;}
+.pyramid-zone{
+  height:60px;display:flex;align-items:center;justify-content:center;position:relative;
+  border:2px solid var(--zc);border-radius:10px;color:#fff;font-weight:600;font-size:14px;
+  clip-path:polygon(6% 0,94% 0,100% 100%,0 100%);
+  background:linear-gradient(180deg,color-mix(in srgb, var(--zc) 22%, transparent),color-mix(in srgb, var(--zc) 8%, transparent));
+  box-shadow:0 0 16px color-mix(in srgb, var(--zc) 60%, transparent);
+  transition:box-shadow .2s;
+}
+.pyramid-zone:hover,.pyramid-zone.zone-active{box-shadow:0 0 30px var(--zc);}
+.zone-collected{position:absolute;bottom:2px;right:6px;display:flex;gap:2px;font-size:11px;}
+.zone-chip{color:#fff;background:rgba(0,0,0,.25);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;}
+.pyramid.processing{pointer-events:none;opacity:.85;}
+.card-stage.processing{pointer-events:none;}
+
+.hint-key-tip{font-size:12px;color:#9db8ff;text-align:center;margin-top:4px;}
+
+/* ---- feedback / level intro / level complete overlays ---- */
+.feedback-box,.level-intro-box,.level-complete-box{
+  display:none;position:fixed;inset:0;z-index:70;align-items:center;justify-content:center;flex-direction:column;
+  text-align:center;background:rgba(5,8,20,.8);padding:20px;
+}
+.feedback-box>*,.level-intro-box>*,.level-complete-box>*{position:relative;}
+.feedback-box{}
+.feedback-box .glass-inner,.level-intro-box .glass-inner,.level-complete-box .glass-inner{display:none;}
+.feedback-box h3,.level-intro-box h2,.level-complete-box h2{color:#4ade80;margin-bottom:10px;font-size:22px;}
+.feedback-box.timeout h3{color:#fbbf24;}
+.feedback-box p,.level-intro-box p,.level-complete-box p{max-width:520px;font-size:14.5px;color:#e6f1ff;line-height:1.7;margin-bottom:14px;}
+.combo-bonus{color:#ffd166;font-weight:700;}
+#noHandMsg{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,.85);padding:8px 16px;border-radius:10px;z-index:65;font-size:13px;}
+#pauseOverlay{display:none;position:fixed;inset:0;background:rgba(5,8,20,.85);z-index:80;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+
+/* ===================== 6. หน้าจบเกม ===================== */
+#endScreen{display:flex;align-items:center;justify-content:center;padding:20px;}
+.end-wrap{max-width:640px;width:100%;padding:28px;text-align:center;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left;margin:16px 0;font-size:13.5px;}
+.stat-grid div{background:rgba(255,255,255,.05);border-radius:10px;padding:8px 12px;}
+.level-badge{display:inline-block;padding:8px 18px;border-radius:20px;background:linear-gradient(135deg,#38bdf8,#a855f7);font-weight:700;margin:10px 0;}
+#reviewList{text-align:left;font-size:13.5px;max-height:50vh;overflow-y:auto;}
+.review-item{background:rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-bottom:8px;border-left:4px solid var(--zc);}
+
+/* ===================== 7. RESPONSIVE ===================== */
+@media (max-width:520px){
+  .pyramid-zone{height:50px;font-size:12px;}
+  .holo-card{min-height:110px;padding:14px;}
+  .hud{font-size:12px;padding:8px;}
+  .data-corner{width:60px;}
+}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<canvas id="arVideoCanvas"></canvas>
+<canvas id="arCursorCanvas"></canvas>
+<canvas id="fxCanvas"></canvas>
+<video id="arVideo" playsinline muted style="display:none;"></video>
+<div id="noHandMsg">🖐️ ไม่พบมือในกล้อง กรุณายกมือขึ้นให้อยู่ในเฟรม</div>
+
+<!-- ============ หน้าเริ่มต้น ============ -->
+<div id="startScreen" class="screen active">
+  <div class="start-wrap glass">
+    <div id="startDataChar"></div>
+    <div class="game-title-th">ภารกิจพิชิตพีระมิด DIKW</div>
+    <div class="game-title-en">DATA's DIKW Sorting Quest</div>
+    <p class="start-desc">สวัสดี! ฉันชื่อเดต้า วันนี้เราจะช่วยกันเปลี่ยนข้อมูลดิบให้กลายเป็นปัญญา พร้อมแล้วไปพิชิตพีระมิด DIKW กันเลย! คัดแยกสถานการณ์ให้ตรงกับหมวด Data / Information / Knowledge / Wisdom ด้วยนิ้วผ่านกล้อง เมาส์ หรือสัมผัสหน้าจอ</p>
+    <div class="objectives">
+      🎯 หลังเล่นจบ ผู้เรียนจะสามารถ:<br>
+      1) อธิบายความหมายของ Data, Information, Knowledge, Wisdom<br>
+      2) จำแนกตัวอย่างตามลำดับชั้น DIKW ได้ถูกต้อง<br>
+      3) อธิบายกระบวนการเปลี่ยนข้อมูลดิบสู่สารสนเทศและความรู้<br>
+      4) เลือกใช้ความรู้ประกอบการตัดสินใจอย่างเหมาะสม<br>
+      5) วิเคราะห์สถานการณ์ที่สัมพันธ์กับองค์ประกอบ DIKW
+    </div>
+    <input type="text" id="nameInput" placeholder="กรอกชื่อผู้เล่น..." maxlength="20">
+    <div class="btn-row">
+      <button class="btn-primary" id="btnPlayAR">🖐️ เล่นด้วย AR</button>
+      <button class="btn-primary" id="btnPlayPointer">🖱️ เล่นด้วยเมาส์/สัมผัส</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" id="btnHowTo">📖 วิธีเล่น</button>
+      <button class="btn-secondary" id="btnGuideStart">📊 เปิดคู่มือ DIKW</button>
+      <button class="icon-btn sound-toggle-btn" id="btnSoundStart">🔊</button>
+    </div>
+    <div class="high-score-tag" id="startHighScore"></div>
+    <div id="arFallbackBox"></div>
+  </div>
+</div>
+
+<!-- ============ Modal วิธีเล่น ============ -->
+<div class="modal-overlay" id="tutorialModal">
+  <div class="modal-box glass">
+    <h2>📖 วิธีเล่น</h2>
+    <p style="font-size:14px;line-height:1.8;">
+      • เกมมี 4 ด่าน ด่านละ 5 ข้อ รวม 20 ข้อ อ่านสถานการณ์บนการ์ด แล้วนำไปวางในชั้นพีระมิดที่ถูกต้อง (Data / Information / Knowledge / Wisdom)<br><br>
+      🖱️ <b>เมาส์:</b> ลากการ์ดไปวางบนชั้นที่ต้องการ<br>
+      👆 <b>สัมผัส:</b> แตะการ์ดเพื่อเลือก แล้วแตะชั้นที่ต้องการเพื่อวาง<br>
+      🖐️ <b>AR:</b> เลื่อนปลายนิ้วชี้ไปค้างเหนือการ์ดประมาณ 0.5 วิเพื่อหยิบ จากนั้นเลื่อนไปค้างเหนือชั้นที่ต้องการ 0.7 วิเพื่อวาง (มีวงแหวนแสดงความคืบหน้า)<br>
+      ⌨️ <b>คีย์บอร์ด:</b> กด 1=Data, 2=Information, 3=Knowledge, 4=Wisdom<br><br>
+      ตอบถูกได้คะแนน ตอบผิดเสียพลังงาน (มี 5 หน่วย) ใช้ปุ่ม "คำใบ้" ได้ด่านละ 2 ครั้ง (หัก 20 คะแนน/ครั้ง) พลังงานหมดเมื่อไรเกมจบทันที
+    </p>
+    <button class="btn-primary modal-close" data-target="tutorialModal">ปิด</button>
+  </div>
+</div>
+
+<!-- ============ Modal คู่มือ DIKW ============ -->
+<div class="modal-overlay" id="guideModal">
+  <div class="modal-box glass">
+    <h2>📊 คู่มือ DIKW</h2>
+    <table>
+      <tr><th>ระดับ</th><th>คำถามสำคัญ</th><th>ความหมาย</th></tr>
+      <tr><td style="color:#38bdf8">Data</td><td>มีข้อเท็จจริงอะไร?</td><td>ข้อมูลดิบที่เก็บรวบรวม</td></tr>
+      <tr><td style="color:#22c55e">Information</td><td>ข้อมูลบอกอะไร?</td><td>ข้อมูลที่ผ่านการประมวลผลและมีความหมาย</td></tr>
+      <tr><td style="color:#f97316">Knowledge</td><td>เราเข้าใจอะไร?</td><td>ข้อสรุป รูปแบบ ความสัมพันธ์ หรือเหตุผล</td></tr>
+      <tr><td style="color:#a855f7">Wisdom</td><td>ควรทำอย่างไร?</td><td>การใช้ความรู้ตัดสินใจอย่างเหมาะสม</td></tr>
+    </table>
+    <p style="margin-top:12px;font-size:13.5px;">Data → Information → Knowledge → Wisdom<br>ข้อมูลดิบ → ข้อมูลที่มีความหมาย → ความเข้าใจ → การตัดสินใจที่เหมาะสม</p>
+    <button class="btn-primary modal-close" data-target="guideModal">ปิด</button>
+  </div>
+</div>
+
+<!-- ============ หน้าจอเกมหลัก ============ -->
+<div id="gameScreen" class="screen">
+  <div class="hud glass">
+    <div class="hud-left">
+      <div class="hud-chip">👤 <span id="hudName"></span></div>
+      <div class="hud-chip">⭐ <span id="hudScore">0</span></div>
+      <div class="hud-chip" id="hudEnergy"></div>
+    </div>
+    <div class="hud-mid">
+      <div class="hud-chip" id="hudLevel">ด่าน 1/4</div>
+      <div class="hud-chip" id="hudQuestion">ข้อ 1/20</div>
+      <div class="hud-chip" id="hudCombo">Combo 0</div>
+      <div class="hud-chip" id="hudTimer" style="display:none;">⏱ 0s</div>
+      <div class="hud-chip" id="hudClock">00:00</div>
+    </div>
+    <div class="hud-right">
+      <div class="hud-chip" id="hintCount">คำใบ้ 0/2</div>
+      <button class="btn-secondary" id="btnHint">💡 คำใบ้</button>
+      <button class="btn-secondary" id="btnGuideGame">📊 คู่มือ</button>
+      <button class="icon-btn" id="btnPause">⏸️</button>
+      <button class="icon-btn sound-toggle-btn" id="btnSoundGame">🔊</button>
+    </div>
+  </div>
+
+  <div class="game-body">
+    <img class="data-corner" id="dataCornerImg" alt="เดต้า">
+    <div id="dataHintBubble"></div>
+
+    <div class="card-stage" id="cardStage">
+      <div id="activeCard" class="holo-card" tabindex="0" role="button" aria-label="การ์ดสถานการณ์">
+        <div class="holo-shine"></div>
+        <p id="cardText"></p>
+      </div>
+    </div>
+
+    <div class="pyramid" id="pyramid">
+      <div class="pyramid-zone" data-category="wisdom" style="--zc:#a855f7;width:34%;" tabindex="0" role="button" aria-label="วางในหมวด Wisdom">
+        <div>Wisdom (ปัญญา)</div><div class="zone-collected"></div>
+      </div>
+      <div class="pyramid-zone" data-category="knowledge" style="--zc:#f97316;width:56%;" tabindex="0" role="button" aria-label="วางในหมวด Knowledge">
+        <div>Knowledge (ความรู้)</div><div class="zone-collected"></div>
+      </div>
+      <div class="pyramid-zone" data-category="information" style="--zc:#22c55e;width:78%;" tabindex="0" role="button" aria-label="วางในหมวด Information">
+        <div>Information (สารสนเทศ)</div><div class="zone-collected"></div>
+      </div>
+      <div class="pyramid-zone" data-category="data" style="--zc:#38bdf8;width:100%;" tabindex="0" role="button" aria-label="วางในหมวด Data">
+        <div>Data (ข้อมูล)</div><div class="zone-collected"></div>
+      </div>
+    </div>
+    <div class="hint-key-tip">💡 กด 1-4 บนคีย์บอร์ดเพื่อเลือกหมวดหมู่ (1=Data 2=Information 3=Knowledge 4=Wisdom)</div>
+  </div>
+</div>
+
+<!-- overlay ต่างๆ ระหว่างเล่น -->
+<div class="level-intro-box" id="levelIntroBox"></div>
+<div class="level-complete-box" id="levelCompleteBox"></div>
+<div class="feedback-box" id="feedbackBox"></div>
+<div id="pauseOverlay">
+  <h2 style="color:#7dd3fc;">⏸️ หยุดเกมชั่วคราว</h2>
+  <button class="btn-primary" id="btnResume">▶️ เล่นต่อ</button>
+  <button class="btn-secondary" id="btnQuitToHome">🏠 กลับหน้าหลัก</button>
+</div>
+
+<!-- ============ หน้าจบเกม ============ -->
+<div id="endScreen" class="screen">
+  <div class="end-wrap glass">
+    <div id="endDataChar"></div>
+    <h2 style="color:#7dd3fc;">สรุปผลการเรียนรู้</h2>
+    <p id="endPlayerName" style="font-size:18px;font-weight:700;"></p>
+    <div class="level-badge" id="endLevelBadge"></div>
+    <div class="stat-grid" id="endStats"></div>
+    <p id="endSuggestion" style="font-size:14px;color:#ffd166;"></p>
+    <div class="btn-row">
+      <button class="btn-primary" id="btnReplay">🔄 เล่นอีกครั้ง</button>
+      <button class="btn-secondary" id="btnHome">🏠 กลับหน้าหลัก</button>
+      <button class="btn-secondary" id="btnReview">📋 ทบทวนข้อที่ตอบผิด</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="reviewModal">
+  <div class="modal-box glass">
+    <h2>📋 ทบทวนข้อที่ตอบผิด</h2>
+    <div id="reviewList"></div>
+    <button class="btn-primary modal-close" data-target="reviewModal">ปิด</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script>
+/* ================================================================
+   ภารกิจพิชิตพีระมิด DIKW — เกมการศึกษาแบบ AR Interaction
+   วิชาวิทยาการคำนวณ ม.5 เรื่อง DIKW
+   ================================================================ */
+
+/* ===================== 1. คลังสถานการณ์ (40 รายการ) ===================== */
+const cardBank = [
+  // --- 1. การเรียนและคะแนนสอบ ---
+  {id:1, text:"คะแนนสอบวิชาวิทยาการคำนวณของนักเรียน 5 คน คือ 55, 62, 70, 81 และ 90 คะแนน", category:"data", explanation:"เป็นตัวเลขดิบที่บันทึกไว้ตรงๆ ยังไม่ได้ผ่านการคำนวณหรือสรุปความหมายใดๆ จึงจัดเป็นข้อมูล", difficulty:1},
+  {id:2, text:"คะแนนเฉลี่ยของนักเรียนกลุ่มนี้เท่ากับ 71.6 คะแนน ซึ่งสูงกว่าเกณฑ์ผ่าน", category:"information", explanation:"เกิดจากการนำข้อมูลดิบมาคำนวณค่าเฉลี่ยและเปรียบเทียบกับเกณฑ์ ทำให้มีความหมายและใช้ประโยชน์ได้ จึงเป็นสารสนเทศ", difficulty:2},
+  {id:3, text:"จากการสังเกตหลายภาคเรียน นักเรียนที่ทำแบบฝึกหัดสม่ำเสมอมักได้คะแนนสอบสูงกว่านักเรียนที่ไม่ทำ", category:"knowledge", explanation:"เป็นข้อสรุปที่ได้จากการวิเคราะห์ความสัมพันธ์ระหว่างพฤติกรรมกับผลคะแนนจากหลายกรณี จึงเป็นความรู้", difficulty:3},
+  {id:4, text:"ครูตัดสินใจจัดกิจกรรมติวเสริมเฉพาะบุคคลให้กับนักเรียนที่คะแนนต่ำกว่าเกณฑ์ในทุกภาคเรียน", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องความสัมพันธ์ระหว่างการฝึกฝนกับผลคะแนนมาใช้ตัดสินใจกำหนดแนวทางช่วยเหลือ จึงเป็นปัญญา", difficulty:4},
+  // --- 2. สภาพอากาศ ---
+  {id:5, text:"อุณหภูมิที่วัดได้จากเทอร์โมมิเตอร์เวลา 08.00 น. คือ 29 องศาเซลเซียส", category:"data", explanation:"เป็นค่าที่ตรวจวัดได้โดยตรงจากเครื่องมือ ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
+  {id:6, text:"อุณหภูมิเฉลี่ยของสัปดาห์นี้สูงกว่าสัปดาห์ที่แล้ว 2 องศาเซลเซียส", category:"information", explanation:"เกิดจากการนำข้อมูลอุณหภูมิหลายวันมาคำนวณและเปรียบเทียบ ทำให้เห็นความเปลี่ยนแปลงที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:7, text:"เมื่ออุณหภูมิผิวน้ำทะเลสูงขึ้นต่อเนื่อง มักส่งผลให้เกิดพายุที่มีความรุนแรงมากขึ้น", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์เชิงเหตุและผลระหว่างปรากฏการณ์สองอย่างจากการสังเกตซ้ำๆ จึงเป็นความรู้", difficulty:3},
+  {id:8, text:"กรมอุตุนิยมวิทยาตัดสินใจประกาศเตือนให้ชาวประมงงดออกเรือในช่วงที่คาดว่าจะเกิดพายุรุนแรง", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องความสัมพันธ์ของอุณหภูมิและพายุมาตัดสินใจออกแนวทางปฏิบัติเพื่อความปลอดภัย จึงเป็นปัญญา", difficulty:4},
+  // --- 3. สุขภาพและการออกกำลังกาย ---
+  {id:9, text:"นาฬิกาสุขภาพบันทึกว่าวันนี้เดินได้ 8,200 ก้าว", category:"data", explanation:"เป็นค่าที่เซนเซอร์บันทึกไว้โดยตรง ยังไม่ผ่านการตีความ จึงเป็นข้อมูล", difficulty:1},
+  {id:10, text:"จำนวนก้าวเดินเฉลี่ยต่อวันของฉันในสัปดาห์นี้คือ 7,500 ก้าว ซึ่งเพิ่มขึ้นจากสัปดาห์ก่อน", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยและเปรียบเทียบข้อมูลหลายวัน ทำให้เห็นแนวโน้มที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:11, text:"การเดินให้ได้อย่างน้อยวันละ 8,000 ก้าวมีความสัมพันธ์กับความเสี่ยงโรคหัวใจที่ลดลง", category:"knowledge", explanation:"เป็นข้อสรุปเชิงความสัมพันธ์ระหว่างพฤติกรรมกับผลลัพธ์ด้านสุขภาพจากการวิเคราะห์ข้อมูลจำนวนมาก จึงเป็นความรู้", difficulty:3},
+  {id:12, text:"แพทย์แนะนำให้ผู้ป่วยเบาหวานเดินออกกำลังกายวันละ 30 นาทีหลังมื้ออาหารทุกวัน", category:"wisdom", explanation:"เป็นการใช้ความรู้ด้านสุขภาพมาประกอบการตัดสินใจกำหนดแนวทางปฏิบัติที่เหมาะกับผู้ป่วย จึงเป็นปัญญา", difficulty:4},
+  // --- 4. การเดินทาง ---
+  {id:13, text:"ระยะทางจากบ้านของสมชายถึงโรงเรียนวัดได้ 12 กิโลเมตร", category:"data", explanation:"เป็นค่าที่วัดได้โดยตรง ยังไม่ผ่านการวิเคราะห์เพิ่มเติม จึงเป็นข้อมูล", difficulty:1},
+  {id:14, text:"ช่วงเวลา 07.00-08.00 น. การเดินทางบนถนนสายนี้ใช้เวลานานกว่าช่วงเวลาอื่นเฉลี่ย 20 นาที", category:"information", explanation:"เกิดจากการเปรียบเทียบเวลาการเดินทางในหลายช่วงเวลา ทำให้เห็นรูปแบบที่มีประโยชน์ จึงเป็นสารสนเทศ", difficulty:2},
+  {id:15, text:"ถนนที่มีสัญญาณไฟจราจรถี่มักทำให้เกิดการจราจรติดขัดในช่วงเวลาเร่งด่วนมากกว่าถนนสายอื่น", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์ระหว่างลักษณะถนนกับปัญหาการจราจรจากการสังเกตหลายกรณี จึงเป็นความรู้", difficulty:3},
+  {id:16, text:"นักเรียนตัดสินใจออกจากบ้านเร็วขึ้น 30 นาทีในวันที่มีฝนตกเพื่อหลีกเลี่ยงรถติด", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องแนวโน้มการจราจรมาใช้ตัดสินใจปรับพฤติกรรมให้เหมาะสม จึงเป็นปัญญา", difficulty:4},
+  // --- 5. การซื้อสินค้า ---
+  {id:17, text:"น้ำมันพืชขวดนี้ติดป้ายราคา 65 บาท", category:"data", explanation:"เป็นตัวเลขราคาที่ระบุไว้ตรงๆ ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
+  {id:18, text:"ราคาน้ำมันพืชเฉลี่ยในเดือนนี้สูงกว่าเดือนที่แล้วร้อยละ 10", category:"information", explanation:"เกิดจากการคำนวณและเปรียบเทียบราคาในแต่ละเดือน ทำให้เห็นแนวโน้มที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:19, text:"เมื่อราคาน้ำมันปาล์มดิบในตลาดโลกสูงขึ้น ราคาน้ำมันพืชในประเทศมักปรับตัวสูงขึ้นตามไปด้วย", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์เชิงเหตุผลระหว่างปัจจัยตลาดโลกกับราคาภายในประเทศ จึงเป็นความรู้", difficulty:3},
+  {id:20, text:"แม่บ้านตัดสินใจซื้อน้ำมันพืชในปริมาณมากช่วงที่มีโปรโมชันลดราคาเพื่อประหยัดค่าใช้จ่ายในระยะยาว", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องแนวโน้มราคามาประกอบการตัดสินใจวางแผนการซื้อ จึงเป็นปัญญา", difficulty:4},
+  // --- 6. สื่อสังคมออนไลน์ ---
+  {id:21, text:"โพสต์ประชาสัมพันธ์กิจกรรมของโรงเรียนมียอดไลก์ 350 ครั้ง", category:"data", explanation:"เป็นตัวเลขที่นับได้โดยตรงจากระบบ ยังไม่ผ่านการวิเคราะห์เพิ่มเติม จึงเป็นข้อมูล", difficulty:1},
+  {id:22, text:"ยอดไลก์เฉลี่ยของโพสต์ในเพจนี้เดือนนี้เพิ่มขึ้นร้อยละ 15 จากเดือนก่อน", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยและเปรียบเทียบระหว่างเดือน ทำให้เห็นการเปลี่ยนแปลงที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:23, text:"โพสต์ที่มีภาพประกอบมักได้รับยอดการมีส่วนร่วมมากกว่าโพสต์ที่มีแต่ข้อความล้วน", category:"knowledge", explanation:"เป็นข้อสรุปจากการวิเคราะห์รูปแบบความสัมพันธ์ระหว่างลักษณะโพสต์กับการมีส่วนร่วมของผู้ติดตาม จึงเป็นความรู้", difficulty:3},
+  {id:24, text:"แอดมินเพจตัดสินใจใส่ภาพประกอบในทุกโพสต์นับจากนี้เพื่อเพิ่มการมีส่วนร่วมของผู้ติดตาม", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องรูปแบบโพสต์มาใช้กำหนดแนวทางปฏิบัติในการทำเพจ จึงเป็นปัญญา", difficulty:4},
+  // --- 7. สิ่งแวดล้อม ---
+  {id:25, text:"อาสาสมัครเก็บขยะจากชายหาดได้น้ำหนักรวม 45 กิโลกรัมในวันนี้", category:"data", explanation:"เป็นตัวเลขที่ชั่งวัดได้โดยตรง ยังไม่ผ่านการตีความ จึงเป็นข้อมูล", difficulty:1},
+  {id:26, text:"ปริมาณขยะบนชายหาดแห่งนี้ในฤดูฝนมากกว่าฤดูแล้งโดยเฉลี่ยร้อยละ 30", category:"information", explanation:"เกิดจากการเปรียบเทียบข้อมูลปริมาณขยะระหว่างสองฤดูกาล ทำให้เห็นความแตกต่างที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:27, text:"ขยะพลาสติกที่ถูกทิ้งตามแม่น้ำมักไหลลงสู่ทะเลมากขึ้นในช่วงฤดูฝนที่มีน้ำหลาก", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์ระหว่างฤดูกาลกับการเคลื่อนที่ของขยะจากการสังเกตหลายปี จึงเป็นความรู้", difficulty:3},
+  {id:28, text:"เทศบาลตัดสินใจติดตั้งตาข่ายดักขยะบริเวณปากแม่น้ำก่อนเข้าสู่ฤดูฝนของทุกปี", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องแนวโน้มขยะตามฤดูกาลมาวางแผนป้องกันปัญหาล่วงหน้า จึงเป็นปัญญา", difficulty:4},
+  // --- 8. การใช้พลังงาน ---
+  {id:29, text:"มิเตอร์ไฟฟ้าของบ้านหลังนี้แสดงค่าการใช้ไฟเดือนนี้ 320 หน่วย", category:"data", explanation:"เป็นค่าที่อ่านได้จากมิเตอร์โดยตรง ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
+  {id:30, text:"ค่าไฟฟ้าเฉลี่ยของบ้านหลังนี้ในช่วงหน้าร้อนสูงกว่าหน้าหนาวร้อยละ 40", category:"information", explanation:"เกิดจากการเปรียบเทียบค่าไฟระหว่างสองฤดูกาล ทำให้เห็นความแตกต่างที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:31, text:"การเปิดเครื่องปรับอากาศต่อเนื่องเป็นเวลานานทำให้ค่าไฟฟ้าเพิ่มขึ้นอย่างมีนัยสำคัญ", category:"knowledge", explanation:"เป็นข้อสรุปเชิงเหตุผลจากการวิเคราะห์ความสัมพันธ์ระหว่างพฤติกรรมการใช้ไฟกับค่าไฟฟ้า จึงเป็นความรู้", difficulty:3},
+  {id:32, text:"ครอบครัวตัดสินใจตั้งเวลาปิดเครื่องปรับอากาศอัตโนมัติหลังเที่ยงคืนเพื่อประหยัดค่าไฟ", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องผลของการใช้เครื่องปรับอากาศมาใช้กำหนดแนวทางปฏิบัติเพื่อประหยัดพลังงาน จึงเป็นปัญญา", difficulty:4},
+  // --- 9. ข้อมูลจากเซนเซอร์ ---
+  {id:33, text:"เซนเซอร์วัดความชื้นในดินของแปลงผักอ่านค่าได้ 35 เปอร์เซ็นต์", category:"data", explanation:"เป็นค่าที่เซนเซอร์ตรวจวัดได้โดยตรง ยังไม่ผ่านการตีความ จึงเป็นข้อมูล", difficulty:1},
+  {id:34, text:"ค่าความชื้นในดินเฉลี่ยตลอดสัปดาห์นี้ต่ำกว่าเกณฑ์ที่พืชต้องการอยู่ร้อยละ 10", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยและเปรียบเทียบกับเกณฑ์มาตรฐาน ทำให้ข้อมูลมีความหมายในการใช้งาน จึงเป็นสารสนเทศ", difficulty:2},
+  {id:35, text:"เมื่อความชื้นในดินต่ำกว่า 30 เปอร์เซ็นต์ติดต่อกันหลายวัน พืชมักแสดงอาการเหี่ยวเฉา", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์เชิงเหตุผลระหว่างความชื้นในดินกับสุขภาพของพืชจากการสังเกตซ้ำๆ จึงเป็นความรู้", difficulty:3},
+  {id:36, text:"เกษตรกรตัดสินใจตั้งระบบรดน้ำอัตโนมัติให้ทำงานทันทีเมื่อค่าความชื้นในดินต่ำกว่าเกณฑ์ที่กำหนด", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องผลกระทบของความชื้นต่อพืชมาออกแบบระบบและตัดสินใจปฏิบัติ จึงเป็นปัญญา", difficulty:4},
+  // --- 10. การวิเคราะห์พฤติกรรม ---
+  {id:37, text:"ระบบบันทึกว่าผู้ใช้คนหนึ่งเปิดแอปพลิเคชันนี้ 12 ครั้งในวันนี้", category:"data", explanation:"เป็นตัวเลขที่ระบบบันทึกไว้โดยตรง ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
+  {id:38, text:"ผู้ใช้คนนี้เปิดแอปพลิเคชันเฉลี่ย 10 ครั้งต่อวันในช่วง 1 เดือนที่ผ่านมา", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยจากข้อมูลการใช้งานหลายวัน ทำให้เห็นพฤติกรรมที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
+  {id:39, text:"ผู้ใช้ที่เปิดแอปพลิเคชันบ่อยในช่วงเย็นมักใช้เวลาอยู่ในแอปนานกว่าผู้ใช้ในช่วงเวลาอื่น", category:"knowledge", explanation:"เป็นข้อสรุปจากการวิเคราะห์ความสัมพันธ์ระหว่างช่วงเวลาการใช้งานกับระยะเวลาที่ใช้แอป จึงเป็นความรู้", difficulty:3},
+  {id:40, text:"ทีมพัฒนาแอปพลิเคชันตัดสินใจส่งการแจ้งเตือนกิจกรรมพิเศษในช่วงเย็นเพื่อเพิ่มการใช้งานของผู้ใช้", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องพฤติกรรมผู้ใช้มาตัดสินใจวางกลยุทธ์การแจ้งเตือน จึงเป็นปัญญา", difficulty:4}
+];
+
+const CATEGORY_META = {
+  data:{label:"Data (ข้อมูล)", color:"#38bdf8"},
+  information:{label:"Information (สารสนเทศ)", color:"#22c55e"},
+  knowledge:{label:"Knowledge (ความรู้)", color:"#f97316"},
+  wisdom:{label:"Wisdom (ปัญญา)", color:"#a855f7"}
+};
+const LEVEL_INFO = {
+  1:{title:"ด่านที่ 1: รู้จัก DIKW", desc:"มาทำความรู้จักข้อมูล สารสนเทศ ความรู้ และปัญญา แบบไม่มีจับเวลา เดต้าจะคอยให้คำแนะนำทุกข้อเลย!"},
+  2:{title:"ด่านที่ 2: จากข้อมูลสู่สารสนเทศ", desc:"รอบนี้แยกให้ออกว่าอะไรคือข้อมูลดิบ อะไรคือสารสนเทศที่ผ่านการประมวลผลแล้ว มีเวลา 30 วินาทีต่อข้อนะ"},
+  3:{title:"ด่านที่ 3: จากสารสนเทศสู่ความรู้", desc:"คราวนี้ดูว่าอะไรคือสารสนเทศ อะไรคือความรู้ที่มาจากการวิเคราะห์แนวโน้มหรือความสัมพันธ์ มีเวลา 25 วินาทีต่อข้อ"},
+  4:{title:"ด่านที่ 4: การตัดสินใจด้วยปัญญา", desc:"ด่านสุดท้าย! จำแนกให้ครบทั้ง 4 ระดับในสถานการณ์ใกล้ตัว มีเวลาเพียง 20 วินาทีต่อข้อ สู้ๆ นะ!"}
+};
+
+/* ===================== 2. ตัวละครเดต้า (วาดด้วย SVG ล้วน) ===================== */
+function dataCharacterSVG(mood){
+  let mouth;
+  if(mood==='happy') mouth = `<path d="M40 70 Q55 85 70 70" stroke="#0ff" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+  else if(mood==='encourage') mouth = `<path d="M42 76 Q55 68 68 76" stroke="#ffd166" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+  else if(mood==='excited') mouth = `<path d="M38 68 Q55 92 72 68" stroke="#0ff" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+  else mouth = `<line x1="42" y1="72" x2="68" y2="72" stroke="#0ff" stroke-width="4" stroke-linecap="round"/>`;
+  return `<svg viewBox="0 0 110 130" class="data-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="headGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+      <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#a855f7"/></linearGradient>
+    </defs>
+    <line x1="55" y1="2" x2="55" y2="12" stroke="#7dd3fc" stroke-width="3"/>
+    <circle cx="55" cy="2" r="4" fill="#0ff"/>
+    <rect x="10" y="40" width="90" height="80" rx="18" fill="url(#bodyGrad)" stroke="#7dd3fc" stroke-width="2"/>
+    <circle cx="55" cy="30" r="28" fill="url(#headGrad)" stroke="#7dd3fc" stroke-width="2"/>
+    <circle cx="42" cy="26" r="7" fill="#0ff"/>
+    <circle cx="68" cy="26" r="7" fill="#0ff"/>
+    ${mouth}
+    <rect x="40" y="85" width="30" height="6" rx="3" fill="#c084fc"/>
+    <rect x="40" y="97" width="20" height="6" rx="3" fill="#67e8f9"/>
+  </svg>`;
+}
+function setDataMood(mood){
+  document.querySelectorAll('.data-mood-target').forEach(el=>el.innerHTML = dataCharacterSVG(mood));
+  const corner = document.getElementById('dataCornerImg');
+  // corner ใช้ svg เป็น background image แบบ inline (data URI) เพื่อใช้กับ <img>
+  const svgStr = dataCharacterSVG(mood);
+  corner.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+}
+
+/* ===================== 3. ตัวแปรสถานะเกม ===================== */
+const state = {
+  screen:'start', playerName:'', controlMode:null, soundOn:true,
+  score:0, energy:5, level:1, questionInLevel:0, totalQuestionIndex:0, questionsAttempted:0,
+  combo:0, maxCombo:0, correctFirstTry:0, needRetry:0,
+  hintsUsedTotal:0, hintsUsedThisLevel:0, wrongAttemptsThisQuestion:0,
+  usedCardIds:new Set(), levelCards:[], currentCard:null,
+  isProcessingAnswer:false, isPaused:false, isDragging:false, selectedForTap:false,
+  timeLimit:0, timeRemaining:0, questionTimerId:null,
+  totalElapsedSeconds:0, energyAtLevelStart:5,
+  wrongLog:[], categoryWrongCount:{data:0,information:0,knowledge:0,wisdom:0}
+};
+let pausedByUser=false, guidePrevPause=false;
+let elapsedTimerId=null;
+
+/* ===================== 4. ยูทิลิตี้ ===================== */
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
+
+/* ===================== 5. เลือกการ์ดตามด่าน ===================== */
+function pickLevelCards(level){
+  const avail = c => !state.usedCardIds.has(c.id);
+  let picks=[];
+  if(level===1 || level===4){
+    ['data','information','knowledge','wisdom'].forEach(cat=>{
+      const pool = shuffle(cardBank.filter(c=>c.category===cat && avail(c)));
+      if(pool.length) picks.push(pool[0]);
+    });
+    let rest = shuffle(cardBank.filter(c=>avail(c) && !picks.includes(c)));
+    while(picks.length<5 && rest.length){ picks.push(rest.pop()); }
+  } else if(level===2){
+    picks = shuffle(cardBank.filter(c=>avail(c) && (c.category==='data'||c.category==='information'))).slice(0,5);
+  } else {
+    picks = shuffle(cardBank.filter(c=>avail(c) && (c.category==='information'||c.category==='knowledge'))).slice(0,5);
+  }
+  picks = shuffle(picks).slice(0,5);
+  picks.forEach(c=>state.usedCardIds.add(c.id));
+  return picks;
+}
+
+/* ===================== 6. เสียง (Web Audio API สังเคราะห์เอง) ===================== */
+let audioCtx=null;
+function ensureAudio(){
+  if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+function playSound(name){
+  if(!state.soundOn) return;
+  ensureAudio();
+  const seqs = {
+    start:[[440,.15,'sine']],
+    select:[[880,.08,'square']],
+    drop:[[300,.08,'sine']],
+    correct:[[523,.1,'triangle'],[659,.1,'triangle'],[784,.15,'triangle']],
+    wrong:[[220,.2,'sawtooth'],[160,.25,'sawtooth']],
+    combo:[[988,.08,'sine'],[1318,.12,'sine']],
+    levelup:[[523,.12,'triangle'],[659,.12,'triangle'],[784,.12,'triangle'],[1046,.2,'triangle']],
+    gameover:[[440,.2,'sine'],[349,.2,'sine'],[261,.3,'sine']]
+  };
+  const seq = seqs[name] || [[440,.1,'sine']];
+  let t=audioCtx.currentTime;
+  seq.forEach(([freq,dur,type])=>{
+    const osc=audioCtx.createOscillator(), gain=audioCtx.createGain();
+    osc.type=type; osc.frequency.value=freq;
+    gain.gain.setValueAtTime(.0001,t);
+    gain.gain.exponentialRampToValueAtTime(.25,t+.02);
+    gain.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t+dur+.02);
+    t+=dur*.9;
+  });
+}
+function toggleSound(){
+  state.soundOn = !state.soundOn;
+  localStorage.setItem('dikw_sound', state.soundOn?'1':'0');
+  document.querySelectorAll('.sound-toggle-btn').forEach(b=>b.textContent = state.soundOn?'🔊':'🔇');
+}
+
+/* ===================== 7. พื้นหลังอนุภาค + Particle Effect ===================== */
+const bgCanvas=document.getElementById('bgCanvas'), fxCanvas=document.getElementById('fxCanvas');
+const arVideoCanvas=document.getElementById('arVideoCanvas'), arCursorCanvas=document.getElementById('arCursorCanvas');
+let bgParticles=[], fxParticles=[];
+function initBgParticles(){
+  bgParticles=[];
+  for(let i=0;i<40;i++){
+    bgParticles.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:Math.random()*2+1,vy:-(Math.random()*.3+.1),a:Math.random()*.5+.2});
+  }
+}
+function spawnParticles(category){
+  const color = CATEGORY_META[category].color;
+  const zone = document.querySelector(`.pyramid-zone[data-category="${category}"]`);
+  if(!zone) return;
+  const r=zone.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  for(let i=0;i<24;i++){
+    const ang=Math.random()*Math.PI*2, sp=Math.random()*3+1;
+    fxParticles.push({x:cx,y:cy,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,life:1,color});
+  }
+}
+function fxLoop(){
+  const ctx=fxCanvas.getContext('2d');
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  bgParticles.forEach(p=>{
+    p.y+=p.vy; if(p.y<-5) p.y=innerHeight+5;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(125,211,252,${p.a})`; ctx.fill();
+  });
+  fxParticles.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=.02;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2);
+    ctx.fillStyle=p.color; ctx.globalAlpha=Math.max(0,p.life); ctx.fill(); ctx.globalAlpha=1;
+  });
+  fxParticles = fxParticles.filter(p=>p.life>0);
+  requestAnimationFrame(fxLoop);
+}
+function resizeAllCanvases(){
+  const dpr = window.devicePixelRatio||1;
+  [bgCanvas,fxCanvas,arVideoCanvas,arCursorCanvas].forEach(c=>{
+    c.width = Math.floor(innerWidth*dpr); c.height = Math.floor(innerHeight*dpr);
+    c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px';
+    c.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+  });
+}
+
+/* ===================== 8. ระบบ AR (MediaPipe Hands) ===================== */
+const arVideo=document.getElementById('arVideo');
+let hands=null, arActive=false;
+let smoothed={x:0,y:0,inited:false};
+const SMOOTHING=0.7, DWELL_SELECT_MS=500, DWELL_DROP_MS=700;
+let arHoldState='idle', dwellTarget=null, dwellStart=0;
+
+async function initAR(){
+  if(location.protocol==='file:'){
+    document.getElementById('arFallbackBox').style.display='block';
+    document.getElementById('arFallbackBox').innerHTML = '⚠️ กล้องต้องเปิดผ่าน HTTPS หรือ localhost เท่านั้น กรุณาใช้เซิร์ฟเวอร์ท้องถิ่นแทนการเปิดไฟล์โดยตรง <br><button class="btn-secondary" id="btnUsePointerFallback" style="margin-top:8px;">🖱️ ใช้เมาส์/สัมผัสแทน</button>';
+    document.getElementById('btnUsePointerFallback').onclick=()=>startGame('pointer');
+    return false;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480},audio:false});
+    arVideo.srcObject = stream; await arVideo.play();
+    if(typeof Hands==='undefined') throw new Error('MediaPipe not loaded');
+    hands = new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+    hands.setOptions({maxNumHands:1, modelComplexity:0, minDetectionConfidence:0.6, minTrackingConfidence:0.6});
+    hands.onResults(onHandsResults);
+    arActive=true;
+    requestAnimationFrame(arLoop);
+    return true;
+  }catch(err){
+    console.warn('AR init failed', err);
+    document.getElementById('arFallbackBox').style.display='block';
+    document.getElementById('arFallbackBox').innerHTML = '⚠️ ไม่สามารถเปิดกล้องหรือโหลดระบบตรวจจับมือได้ (อาจถูกปฏิเสธสิทธิ์กล้อง) <br><button class="btn-secondary" id="btnUsePointerFallback2" style="margin-top:8px;">🖱️ ใช้เมาส์/สัมผัสแทน</button>';
+    document.getElementById('btnUsePointerFallback2').onclick=()=>startGame('pointer');
+    return false;
+  }
+}
+async function arLoop(){
+  if(arActive && !document.hidden && !state.isPaused && state.screen==='game'){
+    try{ await hands.send({image:arVideo}); }catch(e){}
+  }
+  if(arActive) requestAnimationFrame(arLoop);
+}
+function stopCamera(){
+  arActive=false;
+  if(arVideo.srcObject){ arVideo.srcObject.getTracks().forEach(t=>t.stop()); arVideo.srcObject=null; }
+  document.getElementById('noHandMsg').style.display='none';
+}
+function onHandsResults(results){
+  const vctx = arVideoCanvas.getContext('2d');
+  const w = arVideoCanvas.clientWidth, h = arVideoCanvas.clientHeight;
+  vctx.save(); vctx.clearRect(0,0,w,h);
+  vctx.translate(w,0); vctx.scale(-1,1);
+  try{ vctx.drawImage(results.image,0,0,w,h); }catch(e){}
+  vctx.restore();
+
+  const cctx = arCursorCanvas.getContext('2d');
+  cctx.clearRect(0,0,arCursorCanvas.clientWidth,arCursorCanvas.clientHeight);
+
+  if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
+    document.getElementById('noHandMsg').style.display='none';
+    const lm = results.multiHandLandmarks[0][8]; // ปลายนิ้วชี้
+    const rawX = (1-lm.x) * innerWidth; // สลับซ้ายขวาให้ตรงกับภาพ Mirror
+    const rawY = lm.y * innerHeight;
+    if(!smoothed.inited){ smoothed.x=rawX; smoothed.y=rawY; smoothed.inited=true; }
+    else{
+      smoothed.x = smoothed.x*SMOOTHING + rawX*(1-SMOOTHING);
+      smoothed.y = smoothed.y*SMOOTHING + rawY*(1-SMOOTHING);
+    }
+    processDwell(smoothed.x, smoothed.y, cctx);
+  } else {
+    document.getElementById('noHandMsg').style.display='block';
+    dwellTarget=null;
+  }
+}
+function processDwell(x,y,ctx){
+  ctx.beginPath(); ctx.arc(x,y,14,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,230,0,.85)'; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle='#38bdf8'; ctx.stroke();
+
+  if(state.isProcessingAnswer || state.isPaused || state.screen!=='game'){ dwellTarget=null; return; }
+
+  let target=null;
+  if(arHoldState==='idle'){
+    const cardEl=document.getElementById('activeCard');
+    if(cardEl && cardEl.style.display!=='none'){
+      const r=cardEl.getBoundingClientRect();
+      if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) target='card';
+    }
+  } else {
+    document.querySelectorAll('.pyramid-zone').forEach(z=>{
+      const r=z.getBoundingClientRect();
+      if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) target=z.dataset.category;
+    });
+    const cardEl=document.getElementById('activeCard');
+    if(cardEl){ cardEl.style.position='fixed'; cardEl.style.left=(x-cardEl.offsetWidth/2)+'px'; cardEl.style.top=(y-cardEl.offsetHeight/2)+'px'; }
+  }
+
+  const threshold = arHoldState==='idle'?DWELL_SELECT_MS:DWELL_DROP_MS;
+  if(target && target===dwellTarget){
+    const elapsed = performance.now()-dwellStart;
+    const progress = Math.min(1, elapsed/threshold);
+    ctx.beginPath(); ctx.arc(x,y,22,-Math.PI/2,-Math.PI/2+progress*Math.PI*2);
+    ctx.strokeStyle='#7dfcff'; ctx.lineWidth=4; ctx.stroke();
+    if(progress>=1){
+      if(arHoldState==='idle'){ arHoldState='holding'; playSound('select'); }
+      else { handleDrop(target); arHoldState='idle'; }
+      dwellTarget=null;
+    }
+  } else { dwellTarget=target; dwellStart=performance.now(); }
+}
+
+/* ===================== 9. ลาก/วาง ด้วยเมาส์และสัมผัส (Pointer Events) ===================== */
+function setupPointerControls(){
+  const cardEl = document.getElementById('activeCard');
+  let dragOffsetX=0, dragOffsetY=0, startX=0, startY=0, moved=false;
+
+  cardEl.addEventListener('pointerdown',(e)=>{
+    if(state.isProcessingAnswer || state.controlMode==='ar' || state.isPaused) return;
+    cardEl.setPointerCapture(e.pointerId);
+    const r=cardEl.getBoundingClientRect();
+    dragOffsetX=e.clientX-r.left; dragOffsetY=e.clientY-r.top;
+    startX=e.clientX; startY=e.clientY; moved=false; state.isDragging=true;
+    cardEl.classList.add('dragging');
+  });
+  cardEl.addEventListener('pointermove',(e)=>{
+    if(!state.isDragging) return;
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    if(Math.abs(dx)>5||Math.abs(dy)>5) moved=true;
+    cardEl.style.position='fixed';
+    cardEl.style.left=(e.clientX-dragOffsetX)+'px';
+    cardEl.style.top=(e.clientY-dragOffsetY)+'px';
+  });
+  cardEl.addEventListener('pointerup',(e)=>{
+    if(!state.isDragging) return;
+    state.isDragging=false; cardEl.classList.remove('dragging');
+    if(moved){
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const zone = el && el.closest && el.closest('.pyramid-zone');
+      if(zone){ handleDrop(zone.dataset.category); } else { resetCardPosition(); }
+    } else {
+      cardEl.classList.toggle('selected');
+      state.selectedForTap = cardEl.classList.contains('selected');
+    }
+  });
+  cardEl.addEventListener('keydown',(e)=>{
+    if(e.key==='Enter'||e.key===' '){ cardEl.classList.toggle('selected'); state.selectedForTap=cardEl.classList.contains('selected'); }
+  });
+
+  document.querySelectorAll('.pyramid-zone').forEach(zone=>{
+    zone.addEventListener('pointerup', ()=>{
+      if(state.selectedForTap && !state.isProcessingAnswer && !state.isPaused){
+        handleDrop(zone.dataset.category);
+        state.selectedForTap=false; cardEl.classList.remove('selected');
+      }
+    });
+    zone.addEventListener('keydown',(e)=>{
+      if((e.key==='Enter'||e.key===' ') && !state.isProcessingAnswer && !state.isPaused){
+        handleDrop(zone.dataset.category);
+      }
+    });
+  });
+}
+function resetCardPosition(){
+  const cardEl=document.getElementById('activeCard');
+  cardEl.style.position=''; cardEl.style.left=''; cardEl.style.top=''; cardEl.style.transform='';
+}
+
+/* ===================== 10. คำใบ้ Socratic ===================== */
+function generateHint(card, attempt){
+  const hints = {
+    data:"ลองสังเกตดูว่า...นี่คือค่าดิบที่เก็บได้โดยตรง ยังไม่ผ่านการคำนวณหรือสรุปใดๆ ใช่หรือไม่?",
+    information:"ลองพิจารณาว่า...ข้อความนี้ผ่านการคำนวณ เปรียบเทียบ หรือสรุปจากข้อมูลดิบแล้วหรือยัง?",
+    knowledge:"ลองคิดดูว่า...ข้อความนี้อธิบายรูปแบบ ความสัมพันธ์ หรือแนวโน้มที่เกิดขึ้นซ้ำๆ หรือไม่?",
+    wisdom:"ลองสังเกตว่า...ข้อความนี้เสนอการตัดสินใจ ทางเลือก หรือแนวทางปฏิบัติที่ใช้ความรู้ประกอบหรือไม่?"
+  };
+  let base = hints[card.category];
+  if(attempt>=2) base += ` (คำอธิบายเพิ่มเติม: ${card.explanation} — แต่ยังไม่เฉลย ลองเลือกดูอีกครั้งนะ)`;
+  return base;
+}
+function showHint(text, extended){
+  const bubble=document.getElementById('dataHintBubble');
+  bubble.textContent=text; bubble.style.display='block';
+  clearTimeout(window._hintTimer);
+  window._hintTimer=setTimeout(()=>{bubble.style.display='none';}, extended?9000:5000);
+}
+function useHint(){
+  if(state.hintsUsedThisLevel>=2 || state.isProcessingAnswer || state.isPaused || !state.currentCard) return;
+  state.hintsUsedThisLevel++; state.hintsUsedTotal++;
+  state.score = Math.max(0, state.score-20);
+  updateHUD();
+  showHint(generateHint(state.currentCard, 0), false);
+  playSound('select');
+}
+
+/* ===================== 11. ตรรกะหลักของเกม ===================== */
+function startGame(mode){
+  state.controlMode=mode;
+  Object.assign(state,{
+    score:0, energy:5, level:1, questionInLevel:0, totalQuestionIndex:0, questionsAttempted:0,
+    combo:0, maxCombo:0, correctFirstTry:0, needRetry:0, hintsUsedTotal:0, hintsUsedThisLevel:0,
+    usedCardIds:new Set(), wrongLog:[], categoryWrongCount:{data:0,information:0,knowledge:0,wisdom:0},
+    isProcessingAnswer:false, isPaused:false
+  });
+  pausedByUser=false; arHoldState='idle'; dwellTarget=null;
+  document.querySelectorAll('.zone-collected').forEach(z=>z.innerHTML='');
+  showScreen('gameScreen');
+  setDataMood('excited');
+  updateHUD();
+  playSound('start');
+  startElapsedTimer();
+  startLevel(1);
+}
+function startLevel(level){
+  state.level=level; state.questionInLevel=0; state.hintsUsedThisLevel=0; state.energyAtLevelStart=state.energy;
+  state.levelCards = pickLevelCards(level);
+  state.timeLimit = level===1?0: level===2?30: level===3?25:20;
+  showLevelIntro(level, ()=>loadQuestion());
+}
+function loadQuestion(){
+  if(state.questionInLevel >= state.levelCards.length){ finishLevel(); return; }
+  state.currentCard = state.levelCards[state.questionInLevel];
+  state.wrongAttemptsThisQuestion=0; state.isProcessingAnswer=false; state.questionsAttempted++;
+  renderCard(state.currentCard);
+  updateHUD();
+  if(state.timeLimit>0) startQuestionTimer(); else { document.getElementById('hudTimer').style.display='none'; }
+}
+function renderCard(card){
+  const el=document.getElementById('activeCard');
+  el.style.position=''; el.style.left=''; el.style.top=''; el.style.transform=''; el.style.opacity='1'; el.style.transition='';
+  el.classList.remove('selected','shake'); el.style.display='flex';
+  document.getElementById('cardText').textContent = card.text;
+  arHoldState='idle'; dwellTarget=null; state.selectedForTap=false;
+}
+function handleDrop(category){
+  if(state.isProcessingAnswer || state.isPaused) return;
+  const card = state.currentCard; if(!card) return;
+  if(category === card.category){
+    state.isProcessingAnswer=true; clearQuestionTimer();
+    const points = state.wrongAttemptsThisQuestion===0?100: state.wrongAttemptsThisQuestion===1?70:50;
+    addScore(points);
+    if(state.wrongAttemptsThisQuestion===0) state.correctFirstTry++; else state.needRetry++;
+    state.combo++; if(state.combo>state.maxCombo) state.maxCombo=state.combo;
+    let comboBonus=0;
+    if(state.combo%5===0){ comboBonus=100; addScore(100); }
+    else if(state.combo%3===0){ comboBonus=50; addScore(50); }
+    playSound('correct'); if(comboBonus>0) playSound('combo');
+    spawnParticles(category); setDataMood('happy');
+    lockCardIntoZone(category);
+    showFeedback(true, `ยอดเยี่ยม! จัดอยู่ในหมวด ${CATEGORY_META[category].label}`, card.explanation, comboBonus, ()=>{
+      state.questionInLevel++; state.totalQuestionIndex++; setDataMood('neutral'); loadQuestion();
+    });
+  } else {
+    state.wrongAttemptsThisQuestion++;
+    state.energy = Math.max(0, state.energy-1);
+    state.combo=0;
+    state.categoryWrongCount[card.category]++;
+    logWrongIfNeeded(card);
+    playSound('wrong'); setDataMood('encourage');
+    resetCardPosition();
+    document.getElementById('activeCard').classList.add('shake');
+    setTimeout(()=>document.getElementById('activeCard').classList.remove('shake'),500);
+    updateHUD();
+    showHint(generateHint(card, state.wrongAttemptsThisQuestion), state.wrongAttemptsThisQuestion>=2);
+    if(state.energy<=0){ setTimeout(()=>endGame(),900); }
+  }
+}
+function logWrongIfNeeded(card){
+  if(!state.wrongLog.find(w=>w.id===card.id)){
+    state.wrongLog.push({id:card.id, text:card.text, category:card.category, explanation:card.explanation});
+  }
+}
+function addScore(n){ state.score = Math.max(0, state.score+n); updateHUD(); }
+
+function lockCardIntoZone(category){
+  const el=document.getElementById('activeCard');
+  const zone=document.querySelector(`.pyramid-zone[data-category="${category}"]`);
+  const zr=zone.getBoundingClientRect(); const er=el.getBoundingClientRect();
+  el.style.position='fixed'; el.style.left=er.left+'px'; el.style.top=er.top+'px'; el.style.transition='all .5s ease';
+  requestAnimationFrame(()=>{
+    el.style.left=(zr.left+zr.width/2-er.width/2)+'px';
+    el.style.top=(zr.top+zr.height/2-er.height/2)+'px';
+    el.style.transform='scale(.3)'; el.style.opacity='0';
+  });
+  const chip=document.createElement('div'); chip.className='zone-chip'; chip.textContent='✓';
+  zone.querySelector('.zone-collected').appendChild(chip);
+  setTimeout(()=>{ el.style.display='none'; },520);
+}
+
+/* ---- ตัวจับเวลาต่อข้อ ---- */
+function startQuestionTimer(){
+  clearQuestionTimer();
+  state.timeRemaining = state.timeLimit;
+  updateTimerUI();
+  state.questionTimerId = setInterval(()=>{
+    if(state.isPaused) return;
+    state.timeRemaining--; updateTimerUI();
+    if(state.timeRemaining<=0){ clearQuestionTimer(); handleTimeout(); }
+  },1000);
+}
+function clearQuestionTimer(){ if(state.questionTimerId){ clearInterval(state.questionTimerId); state.questionTimerId=null; } }
+function handleTimeout(){
+  if(state.isProcessingAnswer) return;
+  state.isProcessingAnswer=true;
+  const card=state.currentCard;
+  state.energy=Math.max(0,state.energy-1); state.combo=0;
+  state.categoryWrongCount[card.category]++; logWrongIfNeeded(card); state.needRetry++;
+  playSound('wrong'); setDataMood('encourage');
+  lockCardIntoZone(card.category);
+  showFeedback(false, 'หมดเวลา!', `คำตอบที่ถูกต้องคือ ${CATEGORY_META[card.category].label} — ${card.explanation}`, 0, ()=>{
+    state.questionInLevel++; state.totalQuestionIndex++; setDataMood('neutral'); loadQuestion();
+  });
+  updateHUD();
+  if(state.energy<=0) setTimeout(()=>endGame(),900);
+}
+
+/* ---- จบด่าน ---- */
+function finishLevel(){
+  clearQuestionTimer();
+  addScore(100);
+  let noLoss = (state.energy === state.energyAtLevelStart);
+  if(noLoss) addScore(100);
+  playSound('levelup');
+  showLevelComplete(state.level, noLoss, ()=>{
+    if(state.level<4) startLevel(state.level+1); else endGame();
+  });
+}
+
+/* ===================== 12. HUD / UI ===================== */
+function updateHUD(){
+  document.getElementById('hudName').textContent = state.playerName;
+  document.getElementById('hudScore').textContent = state.score;
+  document.getElementById('hudLevel').textContent = `ด่าน ${state.level}/4`;
+  document.getElementById('hudQuestion').textContent = `ข้อ ${Math.min(state.totalQuestionIndex+1,20)}/20`;
+  document.getElementById('hudCombo').textContent = `Combo ${state.combo}`;
+  document.getElementById('hudEnergy').innerHTML = Array.from({length:5}).map((_,i)=>`<span class="energy-icon ${i<state.energy?'full':'empty'}">⬡</span>`).join('');
+  document.getElementById('hintCount').textContent = `คำใบ้ ${state.hintsUsedThisLevel}/2`;
+}
+function updateTimerUI(){
+  const t=document.getElementById('hudTimer');
+  if(state.timeLimit>0){ t.style.display='inline-block'; t.textContent=`⏱ ${state.timeRemaining}s`; t.classList.toggle('urgent', state.timeRemaining<=5); }
+  else t.style.display='none';
+}
+function updateClockUI(){
+  const m=Math.floor(state.totalElapsedSeconds/60).toString().padStart(2,'0');
+  const s=(state.totalElapsedSeconds%60).toString().padStart(2,'0');
+  document.getElementById('hudClock').textContent = `${m}:${s}`;
+}
+function startElapsedTimer(){
+  state.totalElapsedSeconds=0;
+  clearInterval(elapsedTimerId);
+  elapsedTimerId=setInterval(()=>{ if(!state.isPaused){ state.totalElapsedSeconds++; updateClockUI(); } },1000);
+}
+function stopElapsedTimer(){ clearInterval(elapsedTimerId); }
+
+function showLevelIntro(level, cb){
+  const box=document.getElementById('levelIntroBox');
+  box.innerHTML = `<div class="glass" style="padding:26px;max-width:520px;"><div class="data-mood-target" style="width:90px;margin:0 auto 10px;">${dataCharacterSVG('excited')}</div><h2>${LEVEL_INFO[level].title}</h2><p>${LEVEL_INFO[level].desc}</p><button id="levelStartBtn" class="btn-primary">เริ่มด่าน</button></div>`;
+  box.style.display='flex'; state.isPaused=true;
+  document.getElementById('levelStartBtn').onclick=()=>{ box.style.display='none'; state.isPaused=false; cb(); };
+}
+function showLevelComplete(level, noLoss, cb){
+  const box=document.getElementById('levelCompleteBox');
+  box.innerHTML = `<div class="glass" style="padding:26px;max-width:520px;"><div class="data-mood-target" style="width:90px;margin:0 auto 10px;">${dataCharacterSVG('happy')}</div><h2>🎉 ผ่านด่าน ${level} แล้ว!</h2><p>ได้รับโบนัสผ่านด่าน +100 คะแนน ${noLoss?'และโบนัสไม่เสียพลังงาน +100 คะแนน!':''}</p><button id="levelNextBtn" class="btn-primary">ไปต่อ</button></div>`;
+  box.style.display='flex'; state.isPaused=true;
+  document.getElementById('levelNextBtn').onclick=()=>{ box.style.display='none'; state.isPaused=false; cb(); };
+}
+function showFeedback(correct, title, detail, comboBonus, cb){
+  const box=document.getElementById('feedbackBox');
+  box.className='feedback-box '+(correct?'ok':'timeout');
+  box.innerHTML = `<div class="glass" style="padding:24px;max-width:520px;"><h3>${title}</h3><p>${detail}</p>${comboBonus?`<p class="combo-bonus">🔥 โบนัสคอมโบ +${comboBonus}</p>`:''}<button id="feedbackNext" class="btn-primary">ต่อไป</button></div>`;
+  box.style.display='flex';
+  let done=false;
+  const proceed=()=>{ if(done) return; done=true; box.style.display='none'; cb(); };
+  document.getElementById('feedbackNext').onclick=proceed;
+  clearTimeout(window._fbTimer); window._fbTimer=setTimeout(proceed,4000);
+}
+
+/* ===================== 13. หยุดเกม / คู่มือ ===================== */
+function togglePause(){
+  if(state.screen!=='game') return;
+  pausedByUser=!pausedByUser; state.isPaused=pausedByUser;
+  document.getElementById('pauseOverlay').style.display = pausedByUser?'flex':'none';
+}
+function openModal(id){
+  if(state.screen==='game'){ guidePrevPause=state.isPaused; state.isPaused=true; }
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(state.screen==='game') state.isPaused = guidePrevPause;
+}
+
+/* ===================== 14. จบเกม / รีวิว ===================== */
+function endGame(){
+  clearQuestionTimer(); stopElapsedTimer(); stopCamera();
+  state.screen='end';
+  const played = Math.max(1, state.questionsAttempted);
+  const accuracy = Math.round((state.correctFirstTry/played)*100);
+  let highScore = parseInt(localStorage.getItem('dikw_highscore')||'0');
+  if(state.score>highScore){ highScore=state.score; localStorage.setItem('dikw_highscore', highScore); }
+  let levelText = accuracy>=80?'นักวิเคราะห์ข้อมูลระดับยอดเยี่ยม': accuracy>=70?'นักสำรวจข้อมูลระดับดีมาก': accuracy>=60?'นักเรียนรู้ข้อมูลระดับดี':'ผู้ฝึกฝน DIKW';
+  playSound('gameover');
+
+  document.getElementById('endDataChar').innerHTML = `<div class="data-mood-target" style="width:100px;margin:0 auto 10px;">${dataCharacterSVG(accuracy>=60?'happy':'encourage')}</div>`;
+  document.getElementById('endPlayerName').textContent = state.playerName;
+  document.getElementById('endLevelBadge').textContent = levelText;
+  const m=Math.floor(state.totalElapsedSeconds/60).toString().padStart(2,'0');
+  const s=(state.totalElapsedSeconds%60).toString().padStart(2,'0');
+  document.getElementById('endStats').innerHTML = `
+    <div>⭐ คะแนนรวม: ${state.score}</div>
+    <div>🏆 คะแนนสูงสุด: ${highScore}</div>
+    <div>✅ ตอบถูกครั้งแรก: ${state.correctFirstTry} ข้อ</div>
+    <div>🔁 ต้องตอบใหม่: ${state.needRetry} ข้อ</div>
+    <div>💡 ใช้คำใบ้: ${state.hintsUsedTotal} ครั้ง</div>
+    <div>🎯 ความแม่นยำ: ${accuracy}%</div>
+    <div>🔥 Combo สูงสุด: ${state.maxCombo}</div>
+    <div>⏱ เวลาที่ใช้: ${m}:${s}</div>
+  `;
+  document.getElementById('endSuggestion').textContent = suggestionText(state.categoryWrongCount);
+  renderReviewList();
+  showScreen('endScreen');
+}
+function suggestionText(catWrong){
+  const entries = Object.entries(catWrong).sort((a,b)=>b[1]-a[1]);
+  if(entries[0][1]===0) return '💬 เดต้า: เยี่ยมมาก! เธอเข้าใจ DIKW ได้อย่างครบถ้วนแล้ว ลองสอนเพื่อนดูสิ!';
+  const worst = entries[0][0];
+  const tips = {
+    data:'ลองทบทวนความแตกต่างระหว่างข้อมูลดิบกับข้อมูลที่ผ่านการประมวลผลอีกครั้งนะ',
+    information:'ลองสังเกตว่าอะไรทำให้ข้อมูลกลายเป็นสารสนเทศ เช่น การคำนวณหรือเปรียบเทียบ',
+    knowledge:'ลองฝึกมองหารูปแบบ ความสัมพันธ์ หรือแนวโน้มจากสารสนเทศให้มากขึ้น',
+    wisdom:'ลองฝึกเชื่อมโยงความรู้เข้ากับการตัดสินใจหรือแนวทางปฏิบัติจริง'
+  };
+  return `💬 เดต้า: เธอยังสับสนเรื่อง ${CATEGORY_META[worst].label} อยู่บ้าง ${tips[worst]}`;
+}
+function renderReviewList(){
+  const list=document.getElementById('reviewList');
+  if(state.wrongLog.length===0){ list.innerHTML='<p>ไม่มีข้อที่ตอบผิดเลย เยี่ยมมาก!</p>'; return; }
+  list.innerHTML = state.wrongLog.map(w=>`
+    <div class="review-item" style="--zc:${CATEGORY_META[w.category].color}">
+      <div style="font-weight:700;color:${CATEGORY_META[w.category].color}">${CATEGORY_META[w.category].label}</div>
+      <div style="margin:4px 0;">${w.text}</div>
+      <div style="font-size:12.5px;color:#cfe3ff;">${w.explanation}</div>
+    </div>`).join('');
+}
+
+/* ===================== 15. เปลี่ยนหน้าจอ ===================== */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  state.screen = id==='gameScreen'?'game': id==='endScreen'?'end':'start';
+}
+
+/* ===================== 16. ตั้งค่าเริ่มต้น + Event Binding ===================== */
+function captureName(){
+  const v = document.getElementById('nameInput').value.trim();
+  state.playerName = v || 'นักสำรวจข้อมูล';
+}
+function loadSettings(){
+  state.soundOn = localStorage.getItem('dikw_sound') !== '0';
+  document.querySelectorAll('.sound-toggle-btn').forEach(b=>b.textContent = state.soundOn?'🔊':'🔇');
+  const hs = parseInt(localStorage.getItem('dikw_highscore')||'0');
+  document.getElementById('startHighScore').textContent = hs>0 ? `🏆 คะแนนสูงสุดที่เคยทำได้: ${hs}` : '';
+}
+
+let boundOnce=false;
+function attachAllEvents(){
+  if(boundOnce) return; boundOnce=true;
+
+  document.getElementById('startDataChar').innerHTML = `<div class="data-mood-target">${dataCharacterSVG('excited')}</div>`;
+  setDataMood('neutral');
+
+  document.getElementById('btnPlayAR').addEventListener('click', async ()=>{
+    ensureAudio(); captureName();
+    const ok = await initAR();
+    if(ok) startGame('ar');
+  });
+  document.getElementById('btnPlayPointer').addEventListener('click', ()=>{
+    ensureAudio(); captureName(); startGame('pointer');
+  });
+  document.getElementById('btnHowTo').addEventListener('click', ()=>openModal('tutorialModal'));
+  document.getElementById('btnGuideStart').addEventListener('click', ()=>openModal('guideModal'));
+  document.getElementById('btnSoundStart').addEventListener('click', ()=>{ ensureAudio(); toggleSound(); });
+
+  document.querySelectorAll('.modal-close').forEach(btn=>{
+    btn.addEventListener('click', ()=>closeModal(btn.dataset.target));
+  });
+
+  document.getElementById('btnHint').addEventListener('click', useHint);
+  document.getElementById('btnGuideGame').addEventListener('click', ()=>openModal('guideModal'));
+  document.getElementById('btnPause').addEventListener('click', togglePause);
+  document.getElementById('btnSoundGame').addEventListener('click', toggleSound);
+  document.getElementById('btnResume').addEventListener('click', togglePause);
+  document.getElementById('btnQuitToHome').addEventListener('click', ()=>{
+    togglePause(); stopCamera(); stopElapsedTimer(); clearQuestionTimer(); showScreen('startScreen');
+  });
+
+  document.getElementById('btnReplay').addEventListener('click', ()=> startGame(state.controlMode||'pointer'));
+  document.getElementById('btnHome').addEventListener('click', ()=> showScreen('startScreen'));
+  document.getElementById('btnReview').addEventListener('click', ()=> openModal('reviewModal'));
+
+  setupPointerControls();
+
+  document.addEventListener('keydown',(e)=>{
+    if(state.screen!=='game' || state.isPaused || state.isProcessingAnswer) return;
+    const map={'1':'data','2':'information','3':'knowledge','4':'wisdom'};
+    if(map[e.key]) handleDrop(map[e.key]);
+    if(e.key==='h'||e.key==='H') useHint();
+    if(e.key==='Escape') togglePause();
+  });
+
+  window.addEventListener('resize', debounce(resizeAllCanvases,200));
+  window.addEventListener('beforeunload', stopCamera);
+}
+
+window.addEventListener('DOMContentLoaded', ()=>{
+  loadSettings();
+  initBgParticles();
+  resizeAllCanvases();
+  requestAnimationFrame(fxLoop);
+  attachAllEvents();
+});
+</script>
+</body>
+</html>

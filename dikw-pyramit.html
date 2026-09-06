@@ -2,87 +2,721 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DIKW Sorting Quest</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>ภารกิจพิชิตพีระมิด DIKW | DATA's DIKW Sorting Quest</title>
 <style>
-  body { margin:0; background:#0b1026; color:white; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; height:100vh; overflow:hidden; }
-  #game-container { width:100%; max-width:500px; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; }
-  .btn { padding:15px 30px; margin:10px; cursor:pointer; background:#38bdf8; border:none; border-radius:10px; font-size:18px; font-weight:bold; }
-  #ar-canvas { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1; opacity:0.3; }
+/* Reset & Base Styles */
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+html, body { 
+  height: 100%; 
+  width: 100%; 
+  overflow: hidden; 
+  font-family: 'Segoe UI', 'Sarabun', Tahoma, sans-serif; 
+  background: linear-gradient(160deg, #0b1026 0%, #1a1044 40%, #0e1c3f 70%, #150a30 100%); 
+  color: #e6f1ff; 
+  position: relative; 
+}
+
+/* Fixed Canvas Layering Stack */
+#bgCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+#arVideoCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; opacity: 0.28; transform: scaleX(-1); }
+#fxCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
+#arCursorCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; pointer-events: none; }
+
+/* UI Container Structure Layer */
+.app-container { 
+  position: relative; 
+  z-index: 10; 
+  width: 100%; 
+  height: 100vh; 
+  height: 100dvh; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 15px; 
+  box-sizing: border-box; 
+}
+
+/* Global Buttons & Accessibility Focus */
+button { font-family: inherit; cursor: pointer; border: none; outline: none; transition: all 0.2s ease; }
+button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible { outline: 3px solid #7dfcff; outline-offset: 2px; }
+
+/* Screen Views Management */
+.screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; z-index: 20; text-align: center; }
+.screen.active { display: flex; }
+
+.title-glow { 
+  font-size: 2.2rem; 
+  font-weight: 800; 
+  text-transform: uppercase; 
+  letter-spacing: 2px; 
+  color: #7dfcff; 
+  text-shadow: 0 0 15px rgba(125,252,255,0.6), 0 0 30px rgba(125,252,255,0.3); 
+  margin-bottom: 10px; 
+}
+.subtitle { font-size: 1.1rem; color: #b0c4de; margin-bottom: 25px; }
+
+.btn-group { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-top: 15px; }
+.btn { 
+  padding: 12px 28px; 
+  font-size: 1rem; 
+  font-weight: 700; 
+  border-radius: 30px; 
+  background: linear-gradient(135deg, #00d2ff, #3a7bd5); 
+  color: #fff; 
+  box-shadow: 0 4px 15px rgba(0,210,255,0.4); 
+  text-transform: uppercase; 
+  letter-spacing: 1px; 
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,210,255,0.6); }
+.btn-secondary { background: linear-gradient(135deg, #ff2a8d, #9a1f6e); box-shadow: 0 4px 15px rgba(255,42,141,0.4); }
+
+/* Top HUD Bar */
+.hud { 
+  width: 100%; 
+  max-width: 900px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  background: rgba(15, 23, 42, 0.75); 
+  backdrop-filter: blur(10px); 
+  padding: 12px 20px; 
+  border-radius: 16px; 
+  border: 1px solid rgba(125, 252, 255, 0.2); 
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3); 
+  margin-bottom: 10px; 
+}
+.hud-item { display: flex; flex-direction: column; align-items: center; }
+.hud-label { font-size: 0.75rem; color: #8a99ad; text-transform: uppercase; }
+.hud-value { font-size: 1.3rem; font-weight: bold; color: #7dfcff; }
+
+/* Main Gameplay Area */
+.game-layout { 
+  display: flex; 
+  flex-direction: row; 
+  width: 100%; 
+  max-width: 1000px; 
+  height: calc(100% - 90px); 
+  gap: 20px; 
+  justify-content: center; 
+  align-items: center; 
+}
+@media (max-width: 768px) {
+  .game-layout { flex-direction: column; }
+}
+
+/* Pyramid Levels Visual Layout */
+.pyramid-container { flex: 1; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 480px; justify-content: center; align-items: center; }
+.pyramid-zone { 
+  width: 100%; 
+  height: 65px; 
+  border-radius: 12px; 
+  border: 2px dashed rgba(125, 252, 255, 0.4); 
+  background: rgba(16, 26, 58, 0.6); 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  flex-direction: column; 
+  transition: all 0.3s ease; 
+  position: relative; 
+  cursor: pointer; 
+}
+.pyramid-zone.correct { border-style: solid; border-color: #00ff88; background: rgba(0, 255, 136, 0.25); }
+.pyramid-zone.wrong { border-style: solid; border-color: #ff3366; background: rgba(255, 51, 102, 0.25); }
+
+.zone-wisdom { width: 55%; border-color: #ffd700; color: #ffd700; }
+.zone-knowledge { width: 70%; border-color: #ff007f; color: #ff007f; }
+.zone-information { width: 85%; border-color: #00d2ff; color: #00d2ff; }
+.zone-data { width: 100%; border-color: #00ff88; color: #00ff88; }
+
+.zone-title { font-weight: 800; font-size: 0.95rem; letter-spacing: 1px; }
+.zone-num { position: absolute; left: 12px; font-size: 0.8rem; opacity: 0.7; }
+
+/* Card Display & Quick Drop Buttons */
+.card-area { flex: 1; width: 100%; max-width: 450px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; }
+.holo-card { 
+  width: 100%; 
+  background: rgba(20, 30, 65, 0.85); 
+  border: 2px solid #7dfcff; 
+  border-radius: 20px; 
+  padding: 25px; 
+  box-shadow: 0 0 25px rgba(125, 252, 255, 0.2); 
+  text-align: center; 
+  backdrop-filter: blur(12px); 
+}
+.holo-card-text { font-size: 1.2rem; font-weight: 600; line-height: 1.5; color: #ffffff; margin-bottom: 10px; }
+.holo-card-hint { font-size: 0.9rem; color: #ffd700; min-height: 20px; font-style: italic; }
+
+.quick-select-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.qs-btn { 
+  padding: 12px; 
+  background: rgba(255, 255, 255, 0.08); 
+  border: 1px solid rgba(255, 255, 255, 0.2); 
+  color: #fff; 
+  border-radius: 12px; 
+  font-weight: 600; 
+  font-size: 0.9rem; 
+}
+.qs-btn:hover { background: rgba(125, 252, 255, 0.2); border-color: #7dfcff; }
+
+/* Modal Layer Structure (Z-Index = 10000 Top Priority) */
+.modal-overlay { 
+  position: fixed; 
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%; 
+  background: rgba(5, 10, 25, 0.85); 
+  backdrop-filter: blur(12px); 
+  display: none; 
+  align-items: center; 
+  justify-content: center; 
+  z-index: 10000; 
+}
+.modal-overlay.active { display: flex; }
+.modal-content { 
+  background: #121a36; 
+  border: 2px solid #7dfcff; 
+  border-radius: 24px; 
+  padding: 30px; 
+  width: 90%; 
+  max-width: 500px; 
+  text-align: center; 
+  box-shadow: 0 0 40px rgba(125,252,255,0.3); 
+  color: #fff; 
+  max-height: 85vh; 
+  overflow-y: auto; 
+}
+.modal-title { font-size: 1.8rem; font-weight: bold; color: #7dfcff; margin-bottom: 15px; }
+.review-item { text-align: left; background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #7dfcff; }
 </style>
 </head>
 <body>
 
-<video id="webcam" playsinline style="display:none;"></video>
-<canvas id="ar-canvas"></canvas>
+<canvas id="bgCanvas"></canvas>
+<canvas id="arVideoCanvas"></canvas>
+<canvas id="fxCanvas"></canvas>
+<canvas id="arCursorCanvas"></canvas>
 
-<div id="game-container">
-  <h1>ภารกิจพิชิตพีระมิด DIKW</h1>
-  <button class="btn" id="btn-ar">เริ่มเล่นโหมด AR</button>
-  <button class="btn" id="btn-mouse">เริ่มเล่นโหมดเมาส์/สัมผัส</button>
-  <div id="status" style="margin-top:20px;"></div>
+<div class="app-container">
+
+  <div id="startScreen" class="screen active">
+    <h1 class="title-glow">DATA's DIKW Sorting Quest</h1>
+    <p class="subtitle">ภารกิจพิชิตพีระมิดข้อมูล สารสนเทศ ความรู้ และภูมิปัญญา</p>
+    
+    <div style="max-width: 500px; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid rgba(125,252,255,0.2);">
+      <p style="margin-bottom: 10px; font-size: 0.95rem; line-height: 1.6; color: #d0e0ff;">
+        จำแนกคำโจทย์ให้อยู่ในชั้นพีระมิด DIKW ที่ถูกต้อง:<br>
+        1. <strong>Data</strong> (ข้อมูลดิบ) &nbsp;|&nbsp; 
+        2. <strong>Information</strong> (สารสนเทศ)<br>
+        3. <strong>Knowledge</strong> (ความรู้) &nbsp;|&nbsp; 
+        4. <strong>Wisdom</strong> (ภูมิปัญญา)
+      </p>
+    </div>
+
+    <div class="btn-group">
+      <button id="btnStartPointer" class="btn">เล่นด้วยเมาส์ / สัมผัส / ปุ่ม 1-4</button>
+      <button id="btnStartAR" class="btn btn-secondary">เปิดโหมดกล้อง AR (Gesture)</button>
+    </div>
+    
+    <div style="margin-top: 15px;">
+      <button id="btnOpenReviewStart" style="background: transparent; border: none; color: #7dfcff; text-decoration: underline; font-size: 0.9rem;">📖 สรุปบทเรียน DIKW</button>
+    </div>
+  </div>
+
+  <div id="gameScreen" class="screen">
+    <div class="hud">
+      <div class="hud-item">
+        <span class="hud-label">ข้อที่</span>
+        <span id="hudQuestionNum" class="hud-value">1/10</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">คะแนน</span>
+        <span id="hudScore" class="hud-value">0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">เวลา</span>
+        <span id="hudTimer" class="hud-value">00:00</span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button id="btnHint" style="padding: 8px 12px; background: rgba(255,215,0,0.2); border:1px solid #ffd700; color:#ffd700; border-radius:10px; font-weight:bold;">💡 ใบ้ (H)</button>
+        <button id="btnPause" style="padding: 8px 12px; background: rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:10px;">⏸️ พัก</button>
+      </div>
+    </div>
+
+    <div class="game-layout">
+      <div class="pyramid-container">
+        <div class="pyramid-zone zone-wisdom" data-level="wisdom" tabindex="0">
+          <span class="zone-num">[4]</span>
+          <span class="zone-title">WISDOM (ภูมิปัญญา)</span>
+        </div>
+        <div class="pyramid-zone zone-knowledge" data-level="knowledge" tabindex="0">
+          <span class="zone-num">[3]</span>
+          <span class="zone-title">KNOWLEDGE (ความรู้)</span>
+        </div>
+        <div class="pyramid-zone zone-information" data-level="information" tabindex="0">
+          <span class="zone-num">[2]</span>
+          <span class="zone-title">INFORMATION (สารสนเทศ)</span>
+        </div>
+        <div class="pyramid-zone zone-data" data-level="data" tabindex="0">
+          <span class="zone-num">[1]</span>
+          <span class="zone-title">DATA (ข้อมูลดิบ)</span>
+        </div>
+      </div>
+
+      <div class="card-area">
+        <div id="holoCard" class="holo-card">
+          <div id="cardCategory" style="font-size: 0.8rem; color: #7dfcff; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">คำถามจัดหมวดหมู่</div>
+          <div id="cardText" class="holo-card-text">กำลังโหลดโจทย์...</div>
+          <div id="cardHint" class="holo-card-hint"></div>
+        </div>
+
+        <div class="quick-select-btns">
+          <button class="qs-btn" onclick="handleDrop('data')">1️⃣ Data</button>
+          <button class="qs-btn" onclick="handleDrop('information')">2️⃣ Info</button>
+          <button class="qs-btn" onclick="handleDrop('knowledge')">3️⃣ Knowledge</button>
+          <button class="qs-btn" onclick="handleDrop('wisdom')">4️⃣ Wisdom</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<div id="pauseModal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title">พักการเล่น</h2>
+    <p style="margin-bottom: 20px; color:#d0e0ff;">เกมกำลังหยุดชั่วคราว พร้อมแล้วกดเล่นต่อได้เลย</p>
+    <div class="btn-group" style="flex-direction: column;">
+      <button id="btnResume" class="btn">▶️ เล่นต่อ</button>
+      <button id="btnReplay" class="btn btn-secondary">🔄 เริ่มใหม่</button>
+      <button id="btnHome" class="btn" style="background:#4a5568;">🏠 หน้าแรก</button>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverModal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title">ภารกิจเสร็จสิ้น!</h2>
+    <div style="font-size: 3rem; margin: 15px 0;">🏆</div>
+    <p style="font-size: 1.2rem; margin-bottom: 10px;">คะแนนรวม: <span id="finalScore" style="color:#7dfcff; font-weight:bold;">0</span></p>
+    <p style="font-size: 0.95rem; color:#b0c4de; margin-bottom: 20px;">ใช้เวลาทั้งหมด: <span id="finalTime" style="color:#fff;">00:00</span></p>
+    <div class="btn-group">
+      <button id="btnRestartGame" class="btn">🎮 เล่นอีกครั้ง</button>
+      <button id="btnReview" class="btn btn-secondary">📖 ทบทวนเนื้อหา</button>
+    </div>
+  </div>
+</div>
+
+<div id="reviewModal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title">📖 สรุปทฤษฎี DIKW Pyramid</h2>
+    <div style="max-height: 350px; overflow-y: auto; text-align: left; padding-right: 5px;">
+      <div class="review-item">
+        <strong style="color:#00ff88;">1. Data (ข้อมูลดิบ):</strong> ข้อเท็จจริง ตัวเลข หรือสัญลักษณ์ที่ยังไม่ผ่านการประมวลผล เช่น "38.5°C", "100, 150, 120"
+      </div>
+      <div class="review-item">
+        <strong style="color:#00d2ff;">2. Information (สารสนเทศ):</strong> ข้อมูลที่ผ่านการจัดกลุ่มและระบุบริบท เช่น "ผู้ป่วยมีไข้สูง 38.5°C", "ยอดขายเฉลี่ยเดือนนี้คือ 123 ชิ้น"
+      </div>
+      <div class="review-item">
+        <strong style="color:#ff007f;">3. Knowledge (ความรู้):</strong> การประมวลสารสนเทศเข้ากับประสบการณ์ กฎเกณฑ์ หรือองค์ความรู้ เช่น "ไข้สูง 38.5°C ร่วมกับอาการไอ เสี่ยงเป็นไข้หวัดใหญ่"
+      </div>
+      <div class="review-item">
+        <strong style="color:#ffd700;">4. Wisdom (ภูมิปัญญา):</strong> การประยุกต์ใช้ความรู้เพื่อตัดสินใจหรือแก้ไขปัญหาในอนาคต เช่น "สั่งจ่ายยาพร้อมกักตัวผู้ป่วยเพื่อป้องกันการแพร่ระบาด"
+      </div>
+    </div>
+    <button onclick="closeModal('reviewModal')" class="btn" style="margin-top: 20px; width: 100%;">ปิดหน้าต่าง</button>
+  </div>
+</div>
 
 <script>
-const statusDiv = document.getElementById('status');
-let hands = null;
+/* Question Database */
+const QUESTIONS_DATABASE = [
+  { text: "ตัวเลข '38.5°C' บันทึกจากเครื่องวัดอุณหภูมิ", type: "data", hint: "ข้อเท็จจริงตัวเลขลอยๆ ที่ยังไม่มีบริบทอธิบาย" },
+  { text: "รายงานสรุปว่า 'คนไข้มีไข้สูงเกินเกณฑ์ปกติ (38.5°C)'", type: "information", hint: "มีการนำตัวเลขมาประมวลผลและใส่บริบท" },
+  { text: "แนวทางแพทย์ระบุว่า 'อาการไข้สูงร่วมกับไอ ร่างกายอ่อนเพลีย เสี่ยงติดเชื้อไข้หวัดใหญ่'", type: "knowledge", hint: "การสังเคราะห์สารสนเทศเข้ากับความรู้ทางแพทย์" },
+  { text: "การสั่งกักตัวผู้ป่วยและจ่ายยาต้านไวรัสเพื่อป้องกันการแพร่ระบาดในโรงพยาบาล", type: "wisdom", hint: "การตัดสินใจเชิงกลยุทธ์และการแก้ปัญหาจริง" },
+  { text: "รายการพิกัด GPS: '13.7563, 100.5018'", type: "data", hint: "ค่าพิกัดตัวเลขดิบที่ยังไม่ได้บอกว่าเป็นสถานที่ใด" },
+  { text: "หมุดบนแผนที่ระบุว่า 'ตำแหน่งปัจจุบันคือ อนุสาวรีย์ประชาธิปไตย กรุงเทพฯ'", type: "information", hint: "นำพิกัดมาแปลงเป็นชื่อสถานที่ที่เข้าใจได้" },
+  { text: "ข้อมูลจราจรชี้ว่า 'เส้นทางนี้การจราจรติดขัดสะสมในช่วงเวลา 17.00-19.00 น.'", type: "knowledge", hint: "การเข้าใจรูปแบบวิเคราะห์แนวโน้มจากข้อมูลอดีต" },
+  { text: "ระบบ AI ปรับสัญญาณไฟจราจรอัตโนมัติและแนะนำเส้นทางเลี่ยงเพื่อลดรถติด", type: "wisdom", hint: "ระบบตัดสินใจทำงานเพื่อแก้ไขปัญหาสภาพการจราจร" },
+  { text: "ชุดตัวเลขยอดขาย: 120, 150, 90, 200, 310", type: "data", hint: "ตัวเลขอันดับที่ยังไม่ได้สรุปผล" },
+  { text: "กราฟสรุป 'ยอดขายเดือนนี้เติบโตขึ้น 25% เมื่อเทียบกับเดือนที่แล้ว'", type: "information", hint: "นำตัวเลขมาเปรียบเทียบและสรุปผลเปรียบเทียบ" }
+];
 
-// 1. ระบบโหลด MediaPipe แบบปลอดภัย
-async function initMediaPipe() {
-  try {
-    statusDiv.innerText = "กำลังโหลดระบบ AR...";
-    hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-    hands.onResults(results => {
-      // ตรงนี้ใส่ logic วาดและตรวจจับ
-    });
-    return true;
-  } catch (e) {
-    console.error(e);
-    return false;
+/* Game State Variable */
+let state = {
+  screen: 'startScreen',
+  controlMode: 'pointer',
+  questionIndex: 0,
+  score: 0,
+  questions: [],
+  isPaused: false,
+  isProcessingAnswer: false,
+  elapsedSeconds: 0,
+  timerInterval: null,
+  videoStream: null
+};
+
+/* Audio System (Web Audio API) */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function ensureAudio() {
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
   }
 }
 
-// 2. ระบบจัดการกล้องที่รองรับทุก Browser
-async function startCamera() {
+function playSound(type) {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    const video = document.getElementById('webcam');
-    video.srcObject = stream;
-    await video.play();
-    
-    const camera = new Camera(video, {
-      onFrame: async () => { await hands.send({ image: video }); },
-      width: 640, height: 480
+    ensureAudio();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'correct') {
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.25);
+    } else if (type === 'wrong') {
+      osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    }
+  } catch(e) { console.log('Audio error:', e); }
+}
+
+/* Background Particles System */
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+let bgParticles = [];
+
+function initBgParticles() {
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+  bgParticles = [];
+  for (let i = 0; i < 40; i++) {
+    bgParticles.push({
+      x: Math.random() * bgCanvas.width,
+      y: Math.random() * bgCanvas.height,
+      radius: Math.random() * 2 + 1,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      alpha: Math.random() * 0.5 + 0.2
     });
-    camera.start();
-    return true;
-  } catch (err) {
-    alert("ไม่สามารถเข้าถึงกล้องได้: " + err.message);
-    return false;
   }
 }
 
-// 3. ตัวเริ่มเกม (แก้บั๊กกดแล้วไม่ไป)
-document.getElementById('btn-ar').onclick = async () => {
-  statusDiv.innerText = "เตรียมเปิดกล้อง...";
-  const loaded = await initMediaPipe();
-  if (loaded) {
-    const camStarted = await startCamera();
-    if(camStarted) {
-      statusDiv.innerText = "AR เริ่มต้นแล้ว!";
-      // ต่อไปคือฟังก์ชันเข้าสู่เกมหลัก
+function renderBg() {
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  bgCtx.fillStyle = '#7dfcff';
+  bgParticles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) p.x = bgCanvas.width;
+    if (p.x > bgCanvas.width) p.x = 0;
+    if (p.y < 0) p.y = bgCanvas.height;
+    if (p.y > bgCanvas.height) p.y = 0;
+
+    bgCtx.globalAlpha = p.alpha;
+    bgCtx.beginPath();
+    bgCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    bgCtx.fill();
+  });
+  requestAnimationFrame(renderBg);
+}
+
+/* FX Canvas Explosion Effect */
+const fxCanvas = document.getElementById('fxCanvas');
+const fxCtx = fxCanvas.getContext('2d');
+let fxParticles = [];
+
+function createExplosion(x, y, color = '#7dfcff') {
+  for (let i = 0; i < 25; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 5 + 2;
+    fxParticles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: Math.random() * 0.03 + 0.02,
+      color
+    });
+  }
+}
+
+function renderFx() {
+  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  fxParticles.forEach((p, idx) => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= p.decay;
+    if (p.life <= 0) {
+      fxParticles.splice(idx, 1);
+      return;
+    }
+    fxCtx.globalAlpha = p.life;
+    fxCtx.fillStyle = p.color;
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    fxCtx.fill();
+  });
+  requestAnimationFrame(renderFx);
+}
+
+/* Navigation Screen Functions */
+function showScreen(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById(screenId);
+  if (target) target.classList.add('active');
+  state.screen = screenId;
+}
+
+function openModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) modal.classList.add('active');
+}
+
+function closeModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) modal.classList.remove('active');
+}
+
+/* AR Camera Handler */
+async function initAR() {
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      state.videoStream = stream;
+      const videoCanvas = document.getElementById('arVideoCanvas');
+      const videoEl = document.createElement('video');
+      videoEl.srcObject = stream;
+      videoEl.autoplay = true;
+      videoEl.play();
+      
+      const drawVideo = () => {
+        if (state.controlMode === 'ar' && state.videoStream) {
+          const ctx = videoCanvas.getContext('2d');
+          videoCanvas.width = window.innerWidth;
+          videoCanvas.height = window.innerHeight;
+          ctx.drawImage(videoEl, 0, 0, videoCanvas.width, videoCanvas.height);
+          requestAnimationFrame(drawVideo);
+        }
+      };
+      drawVideo();
+      return true;
+    }
+  } catch(err) {
+    alert('ไม่สามารถเชื่อมต่อกล้องได้ ระบบจะเปลี่ยนเป็นโหมดควบคุมด้วยสัมผัส/เมาส์แทน');
+    console.error('AR Camera Error:', err);
+    return false;
+  }
+  return false;
+}
+
+function stopCamera() {
+  if (state.videoStream) {
+    state.videoStream.getTracks().forEach(track => track.stop());
+    state.videoStream = null;
+  }
+}
+
+/* Game Mechanics & Core Logic */
+function startGame(mode) {
+  state.controlMode = mode;
+  state.score = 0;
+  state.questionIndex = 0;
+  state.isPaused = false;
+  state.isProcessingAnswer = false;
+  state.elapsedSeconds = 0;
+  
+  state.questions = [...QUESTIONS_DATABASE].sort(() => Math.random() - 0.5);
+
+  showScreen('gameScreen');
+  updateHUD();
+  loadCurrentQuestion();
+  startTimer();
+}
+
+function loadCurrentQuestion() {
+  if (state.questionIndex >= state.questions.length) {
+    endGame();
+    return;
+  }
+  const q = state.questions[state.questionIndex];
+  document.getElementById('cardText').innerText = q.text;
+  document.getElementById('cardHint').innerText = '';
+  document.getElementById('hudQuestionNum').innerText = `${state.questionIndex + 1}/${state.questions.length}`;
+  state.isProcessingAnswer = false;
+}
+
+function handleDrop(selectedType) {
+  if (state.isPaused || state.isProcessingAnswer || state.screen !== 'gameScreen') return;
+  state.isProcessingAnswer = true;
+
+  const currentQ = state.questions[state.questionIndex];
+  const targetZone = document.querySelector(`.pyramid-zone[data-level="${selectedType}"]`);
+
+  if (selectedType === currentQ.type) {
+    playSound('correct');
+    state.score += 100;
+    if (targetZone) {
+      targetZone.classList.add('correct');
+      const rect = targetZone.getBoundingClientRect();
+      createExplosion(rect.left + rect.width / 2, rect.top + rect.height / 2, '#00ff88');
+    }
+  } else {
+    playSound('wrong');
+    if (targetZone) {
+      targetZone.classList.add('wrong');
+      const rect = targetZone.getBoundingClientRect();
+      createExplosion(rect.left + rect.width / 2, rect.top + rect.height / 2, '#ff3366');
     }
   }
-};
 
-document.getElementById('btn-mouse').onclick = () => {
-  statusDiv.innerText = "เริ่มโหมดปกติ...";
-  // logic เริ่มเกมปกติ
-};
+  updateHUD();
+
+  setTimeout(() => {
+    document.querySelectorAll('.pyramid-zone').forEach(z => {
+      z.classList.remove('correct', 'wrong');
+    });
+    state.questionIndex++;
+    loadCurrentQuestion();
+  }, 1000);
+}
+
+function useHint() {
+  if (state.isPaused || state.screen !== 'gameScreen') return;
+  const currentQ = state.questions[state.questionIndex];
+  document.getElementById('cardHint').innerText = `💡 คำใบ้: ${currentQ.hint}`;
+}
+
+function updateHUD() {
+  document.getElementById('hudScore').innerText = state.score;
+}
+
+function startTimer() {
+  clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    if (!state.isPaused && state.screen === 'gameScreen') {
+      state.elapsedSeconds++;
+      const m = String(Math.floor(state.elapsedSeconds / 60)).padStart(2, '0');
+      const s = String(state.elapsedSeconds % 60).padStart(2, '0');
+      document.getElementById('hudTimer').innerText = `${m}:${s}`;
+    }
+  }, 1000);
+}
+
+function togglePause() {
+  state.isPaused = !state.isPaused;
+  if (state.isPaused) {
+    openModal('pauseModal');
+  } else {
+    closeModal('pauseModal');
+  }
+}
+
+function endGame() {
+  clearInterval(state.timerInterval);
+  const m = String(Math.floor(state.elapsedSeconds / 60)).padStart(2, '0');
+  const s = String(state.elapsedSeconds % 60).padStart(2, '0');
+  document.getElementById('finalScore').innerText = state.score;
+  document.getElementById('finalTime').innerText = `${m}:${s}`;
+  openModal('gameOverModal');
+}
+
+/* Canvas Resizing Utility */
+function resizeAllCanvases() {
+  [bgCanvas, fxCanvas, document.getElementById('arVideoCanvas'), document.getElementById('arCursorCanvas')].forEach(c => {
+    if(c) {
+      c.width = window.innerWidth;
+      c.height = window.innerHeight;
+    }
+  });
+  initBgParticles();
+}
+
+/* Event Listeners Initialization */
+document.addEventListener('DOMContentLoaded', () => {
+  resizeAllCanvases();
+  renderBg();
+  renderFx();
+
+  // Mode Selection Buttons
+  document.getElementById('btnStartPointer').addEventListener('click', () => {
+    stopCamera();
+    startGame('pointer');
+  });
+
+  document.getElementById('btnStartAR').addEventListener('click', async () => {
+    ensureAudio();
+    const ok = await initAR();
+    startGame(ok ? 'ar' : 'pointer');
+  });
+
+  document.getElementById('btnOpenReviewStart').addEventListener('click', () => openModal('reviewModal'));
+  document.getElementById('btnHint').addEventListener('click', useHint);
+  document.getElementById('btnPause').addEventListener('click', togglePause);
+  document.getElementById('btnResume').addEventListener('click', togglePause);
+
+  // Modal Control Actions
+  document.getElementById('btnReplay').addEventListener('click', async () => {
+    closeModal('pauseModal');
+    if (state.controlMode === 'ar') {
+      const ok = await initAR();
+      startGame(ok ? 'ar' : 'pointer');
+    } else {
+      startGame('pointer');
+    }
+  });
+
+  document.getElementById('btnHome').addEventListener('click', () => {
+    closeModal('pauseModal');
+    stopCamera();
+    showScreen('startScreen');
+  });
+
+  document.getElementById('btnRestartGame').addEventListener('click', () => {
+    closeModal('gameOverModal');
+    startGame(state.controlMode);
+  });
+
+  document.getElementById('btnReview').addEventListener('click', () => {
+    closeModal('gameOverModal');
+    openModal('reviewModal');
+  });
+
+  // Pyramid Zone Click Handlers
+  document.querySelectorAll('.pyramid-zone').forEach(zone => {
+    zone.addEventListener('click', () => {
+      const level = zone.getAttribute('data-level');
+      handleDrop(level);
+    });
+  });
+
+  // Keyboard Shortcuts Binding
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.screen === 'gameScreen') {
+      togglePause();
+      return;
+    }
+    if (state.screen !== 'gameScreen' || state.isPaused || state.isProcessingAnswer) return;
+
+    const map = { '1': 'data', '2': 'information', '3': 'knowledge', '4': 'wisdom' };
+    if (map[e.key]) handleDrop(map[e.key]);
+    if (e.key === 'h' || e.key === 'H') useHint();
+  });
+
+  window.addEventListener('resize', resizeAllCanvases);
+});
 </script>
 </body>
 </html>

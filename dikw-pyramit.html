@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <title>ภารกิจพิชิตพีระมิด DIKW | DATA's DIKW Sorting Quest</title>
 <style>
-/* ===================== 1. RESET & พื้นฐาน ===================== */
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow:hidden;}
 body{
@@ -13,7 +12,7 @@ body{
   background:linear-gradient(160deg,#0b1026 0%,#1a1044 40%,#0e1c3f 70%,#150a30 100%);
   color:#e6f1ff;
   position:relative;
-  height:100vh;width:100vw;
+  height:100vh;height:100dvh;width:100vw;
 }
 button{font-family:inherit;cursor:pointer;}
 button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, input:focus-visible{
@@ -27,8 +26,7 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
 #fxCanvas{z-index:40;}
 #arCursorCanvas{z-index:60;}
 
-/* ===================== 2. SCREENS ===================== */
-.screen{display:none;position:relative;z-index:5;height:100vh;width:100vw;overflow-y:auto;}
+.screen{display:none;position:relative;z-index:5;height:100vh;height:100dvh;width:100vw;overflow-y:auto;}
 .screen.active{display:block;}
 
 .glass{
@@ -40,7 +38,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   box-shadow:0 0 24px rgba(80,120,255,0.15);
 }
 
-/* ---- ปุ่มมาตรฐาน ---- */
 .btn-primary,.btn-secondary{
   padding:12px 22px;border-radius:12px;border:none;font-size:16px;font-weight:600;
   transition:transform .15s, box-shadow .15s; min-height:44px;
@@ -50,6 +47,7 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   box-shadow:0 0 16px rgba(168,85,247,.5);
 }
 .btn-primary:hover{transform:translateY(-2px);}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .btn-secondary{
   background:rgba(255,255,255,0.1);color:#e6f1ff;border:1px solid rgba(157,206,255,.4);
 }
@@ -59,7 +57,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   background:rgba(255,255,255,0.08);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;
 }
 
-/* ===================== 3. หน้าเริ่มต้น ===================== */
 #startScreen{display:flex;align-items:center;justify-content:center;padding:20px;}
 .start-wrap{max-width:900px;width:100%;padding:32px;text-align:center;}
 .game-title-th{font-size:clamp(24px,5vw,38px);font-weight:800;background:linear-gradient(90deg,#7dd3fc,#c084fc,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent;}
@@ -75,7 +72,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
 .high-score-tag{font-size:13px;color:#ffd166;margin-top:8px;}
 #arFallbackBox{display:none;margin-top:14px;padding:12px;border-radius:12px;background:rgba(255,80,80,.12);border:1px solid rgba(255,120,120,.4);font-size:14px;}
 
-/* ===================== 4. MODAL ===================== */
 .modal-overlay{
   display:none;position:fixed;inset:0;background:rgba(5,8,20,.75);z-index:100;
   align-items:center;justify-content:center;padding:16px;
@@ -88,8 +84,7 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
 .modal-box th{background:rgba(125,211,252,.15);}
 .modal-close{margin-top:16px;}
 
-/* ===================== 5. หน้าจอเกม ===================== */
-#gameScreen{display:flex;flex-direction:column;height:100vh;}
+#gameScreen{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .hud{
   display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
   padding:10px 16px;z-index:20;position:relative;font-size:14px;
@@ -134,34 +129,30 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   height:60px;display:flex;align-items:center;justify-content:center;position:relative;
   border:2px solid var(--zc);border-radius:10px;color:#fff;font-weight:600;font-size:14px;
   clip-path:polygon(6% 0,94% 0,100% 100%,0 100%);
+  background:rgba(255,255,255,.08);
   background:linear-gradient(180deg,color-mix(in srgb, var(--zc) 22%, transparent),color-mix(in srgb, var(--zc) 8%, transparent));
+  box-shadow:0 0 14px rgba(125,211,252,.35);
   box-shadow:0 0 16px color-mix(in srgb, var(--zc) 60%, transparent);
   transition:box-shadow .2s;
 }
 .pyramid-zone:hover,.pyramid-zone.zone-active{box-shadow:0 0 30px var(--zc);}
 .zone-collected{position:absolute;bottom:2px;right:6px;display:flex;gap:2px;font-size:11px;}
 .zone-chip{color:#fff;background:rgba(0,0,0,.25);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;}
-.pyramid.processing{pointer-events:none;opacity:.85;}
-.card-stage.processing{pointer-events:none;}
 
 .hint-key-tip{font-size:12px;color:#9db8ff;text-align:center;margin-top:4px;}
 
-/* ---- feedback / level intro / level complete overlays ---- */
 .feedback-box,.level-intro-box,.level-complete-box{
   display:none;position:fixed;inset:0;z-index:70;align-items:center;justify-content:center;flex-direction:column;
   text-align:center;background:rgba(5,8,20,.8);padding:20px;
 }
-.feedback-box>*,.level-intro-box>*,.level-complete-box>*{position:relative;}
-.feedback-box{}
-.feedback-box .glass-inner,.level-intro-box .glass-inner,.level-complete-box .glass-inner{display:none;}
 .feedback-box h3,.level-intro-box h2,.level-complete-box h2{color:#4ade80;margin-bottom:10px;font-size:22px;}
 .feedback-box.timeout h3{color:#fbbf24;}
+.feedback-box.gameover h3{color:#ef4444;}
 .feedback-box p,.level-intro-box p,.level-complete-box p{max-width:520px;font-size:14.5px;color:#e6f1ff;line-height:1.7;margin-bottom:14px;}
 .combo-bonus{color:#ffd166;font-weight:700;}
 #noHandMsg{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,.85);padding:8px 16px;border-radius:10px;z-index:65;font-size:13px;}
 #pauseOverlay{display:none;position:fixed;inset:0;background:rgba(5,8,20,.85);z-index:80;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
 
-/* ===================== 6. หน้าจบเกม ===================== */
 #endScreen{display:flex;align-items:center;justify-content:center;padding:20px;}
 .end-wrap{max-width:640px;width:100%;padding:28px;text-align:center;}
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left;margin:16px 0;font-size:13.5px;}
@@ -170,7 +161,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
 #reviewList{text-align:left;font-size:13.5px;max-height:50vh;overflow-y:auto;}
 .review-item{background:rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-bottom:8px;border-left:4px solid var(--zc);}
 
-/* ===================== 7. RESPONSIVE ===================== */
 @media (max-width:520px){
   .pyramid-zone{height:50px;font-size:12px;}
   .holo-card{min-height:110px;padding:14px;}
@@ -188,7 +178,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
 <video id="arVideo" playsinline muted style="display:none;"></video>
 <div id="noHandMsg">🖐️ ไม่พบมือในกล้อง กรุณายกมือขึ้นให้อยู่ในเฟรม</div>
 
-<!-- ============ หน้าเริ่มต้น ============ -->
 <div id="startScreen" class="screen active">
   <div class="start-wrap glass">
     <div id="startDataChar"></div>
@@ -218,7 +207,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   </div>
 </div>
 
-<!-- ============ Modal วิธีเล่น ============ -->
 <div class="modal-overlay" id="tutorialModal">
   <div class="modal-box glass">
     <h2>📖 วิธีเล่น</h2>
@@ -227,14 +215,13 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
       🖱️ <b>เมาส์:</b> ลากการ์ดไปวางบนชั้นที่ต้องการ<br>
       👆 <b>สัมผัส:</b> แตะการ์ดเพื่อเลือก แล้วแตะชั้นที่ต้องการเพื่อวาง<br>
       🖐️ <b>AR:</b> เลื่อนปลายนิ้วชี้ไปค้างเหนือการ์ดประมาณ 0.5 วิเพื่อหยิบ จากนั้นเลื่อนไปค้างเหนือชั้นที่ต้องการ 0.7 วิเพื่อวาง (มีวงแหวนแสดงความคืบหน้า)<br>
-      ⌨️ <b>คีย์บอร์ด:</b> กด 1=Data, 2=Information, 3=Knowledge, 4=Wisdom<br><br>
+      ⌨️ <b>คีย์บอร์ด:</b> กด 1=Data, 2=Information, 3=Knowledge, 4=Wisdom, Esc=หยุดชั่วคราว<br><br>
       ตอบถูกได้คะแนน ตอบผิดเสียพลังงาน (มี 5 หน่วย) ใช้ปุ่ม "คำใบ้" ได้ด่านละ 2 ครั้ง (หัก 20 คะแนน/ครั้ง) พลังงานหมดเมื่อไรเกมจบทันที
     </p>
     <button class="btn-primary modal-close" data-target="tutorialModal">ปิด</button>
   </div>
 </div>
 
-<!-- ============ Modal คู่มือ DIKW ============ -->
 <div class="modal-overlay" id="guideModal">
   <div class="modal-box glass">
     <h2>📊 คู่มือ DIKW</h2>
@@ -250,7 +237,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   </div>
 </div>
 
-<!-- ============ หน้าจอเกมหลัก ============ -->
 <div id="gameScreen" class="screen">
   <div class="hud glass">
     <div class="hud-left">
@@ -303,7 +289,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   </div>
 </div>
 
-<!-- overlay ต่างๆ ระหว่างเล่น -->
 <div class="level-intro-box" id="levelIntroBox"></div>
 <div class="level-complete-box" id="levelCompleteBox"></div>
 <div class="feedback-box" id="feedbackBox"></div>
@@ -313,7 +298,6 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
   <button class="btn-secondary" id="btnQuitToHome">🏠 กลับหน้าหลัก</button>
 </div>
 
-<!-- ============ หน้าจบเกม ============ -->
 <div id="endScreen" class="screen">
   <div class="end-wrap glass">
     <div id="endDataChar"></div>
@@ -341,58 +325,46 @@ button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible, inp
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 <script>
 /* ================================================================
-   ภารกิจพิชิตพีระมิด DIKW — เกมการศึกษาแบบ AR Interaction
-   วิชาวิทยาการคำนวณ ม.5 เรื่อง DIKW
+   ภารกิจพิชิตพีระมิด DIKW — เกมการศึกษาแบบ AR Interaction (ฉบับแก้ไข)
    ================================================================ */
 
-/* ===================== 1. คลังสถานการณ์ (40 รายการ) ===================== */
 const cardBank = [
-  // --- 1. การเรียนและคะแนนสอบ ---
   {id:1, text:"คะแนนสอบวิชาวิทยาการคำนวณของนักเรียน 5 คน คือ 55, 62, 70, 81 และ 90 คะแนน", category:"data", explanation:"เป็นตัวเลขดิบที่บันทึกไว้ตรงๆ ยังไม่ได้ผ่านการคำนวณหรือสรุปความหมายใดๆ จึงจัดเป็นข้อมูล", difficulty:1},
   {id:2, text:"คะแนนเฉลี่ยของนักเรียนกลุ่มนี้เท่ากับ 71.6 คะแนน ซึ่งสูงกว่าเกณฑ์ผ่าน", category:"information", explanation:"เกิดจากการนำข้อมูลดิบมาคำนวณค่าเฉลี่ยและเปรียบเทียบกับเกณฑ์ ทำให้มีความหมายและใช้ประโยชน์ได้ จึงเป็นสารสนเทศ", difficulty:2},
   {id:3, text:"จากการสังเกตหลายภาคเรียน นักเรียนที่ทำแบบฝึกหัดสม่ำเสมอมักได้คะแนนสอบสูงกว่านักเรียนที่ไม่ทำ", category:"knowledge", explanation:"เป็นข้อสรุปที่ได้จากการวิเคราะห์ความสัมพันธ์ระหว่างพฤติกรรมกับผลคะแนนจากหลายกรณี จึงเป็นความรู้", difficulty:3},
   {id:4, text:"ครูตัดสินใจจัดกิจกรรมติวเสริมเฉพาะบุคคลให้กับนักเรียนที่คะแนนต่ำกว่าเกณฑ์ในทุกภาคเรียน", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องความสัมพันธ์ระหว่างการฝึกฝนกับผลคะแนนมาใช้ตัดสินใจกำหนดแนวทางช่วยเหลือ จึงเป็นปัญญา", difficulty:4},
-  // --- 2. สภาพอากาศ ---
   {id:5, text:"อุณหภูมิที่วัดได้จากเทอร์โมมิเตอร์เวลา 08.00 น. คือ 29 องศาเซลเซียส", category:"data", explanation:"เป็นค่าที่ตรวจวัดได้โดยตรงจากเครื่องมือ ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
   {id:6, text:"อุณหภูมิเฉลี่ยของสัปดาห์นี้สูงกว่าสัปดาห์ที่แล้ว 2 องศาเซลเซียส", category:"information", explanation:"เกิดจากการนำข้อมูลอุณหภูมิหลายวันมาคำนวณและเปรียบเทียบ ทำให้เห็นความเปลี่ยนแปลงที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:7, text:"เมื่ออุณหภูมิผิวน้ำทะเลสูงขึ้นต่อเนื่อง มักส่งผลให้เกิดพายุที่มีความรุนแรงมากขึ้น", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์เชิงเหตุและผลระหว่างปรากฏการณ์สองอย่างจากการสังเกตซ้ำๆ จึงเป็นความรู้", difficulty:3},
   {id:8, text:"กรมอุตุนิยมวิทยาตัดสินใจประกาศเตือนให้ชาวประมงงดออกเรือในช่วงที่คาดว่าจะเกิดพายุรุนแรง", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องความสัมพันธ์ของอุณหภูมิและพายุมาตัดสินใจออกแนวทางปฏิบัติเพื่อความปลอดภัย จึงเป็นปัญญา", difficulty:4},
-  // --- 3. สุขภาพและการออกกำลังกาย ---
   {id:9, text:"นาฬิกาสุขภาพบันทึกว่าวันนี้เดินได้ 8,200 ก้าว", category:"data", explanation:"เป็นค่าที่เซนเซอร์บันทึกไว้โดยตรง ยังไม่ผ่านการตีความ จึงเป็นข้อมูล", difficulty:1},
   {id:10, text:"จำนวนก้าวเดินเฉลี่ยต่อวันของฉันในสัปดาห์นี้คือ 7,500 ก้าว ซึ่งเพิ่มขึ้นจากสัปดาห์ก่อน", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยและเปรียบเทียบข้อมูลหลายวัน ทำให้เห็นแนวโน้มที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:11, text:"การเดินให้ได้อย่างน้อยวันละ 8,000 ก้าวมีความสัมพันธ์กับความเสี่ยงโรคหัวใจที่ลดลง", category:"knowledge", explanation:"เป็นข้อสรุปเชิงความสัมพันธ์ระหว่างพฤติกรรมกับผลลัพธ์ด้านสุขภาพจากการวิเคราะห์ข้อมูลจำนวนมาก จึงเป็นความรู้", difficulty:3},
   {id:12, text:"แพทย์แนะนำให้ผู้ป่วยเบาหวานเดินออกกำลังกายวันละ 30 นาทีหลังมื้ออาหารทุกวัน", category:"wisdom", explanation:"เป็นการใช้ความรู้ด้านสุขภาพมาประกอบการตัดสินใจกำหนดแนวทางปฏิบัติที่เหมาะกับผู้ป่วย จึงเป็นปัญญา", difficulty:4},
-  // --- 4. การเดินทาง ---
   {id:13, text:"ระยะทางจากบ้านของสมชายถึงโรงเรียนวัดได้ 12 กิโลเมตร", category:"data", explanation:"เป็นค่าที่วัดได้โดยตรง ยังไม่ผ่านการวิเคราะห์เพิ่มเติม จึงเป็นข้อมูล", difficulty:1},
   {id:14, text:"ช่วงเวลา 07.00-08.00 น. การเดินทางบนถนนสายนี้ใช้เวลานานกว่าช่วงเวลาอื่นเฉลี่ย 20 นาที", category:"information", explanation:"เกิดจากการเปรียบเทียบเวลาการเดินทางในหลายช่วงเวลา ทำให้เห็นรูปแบบที่มีประโยชน์ จึงเป็นสารสนเทศ", difficulty:2},
   {id:15, text:"ถนนที่มีสัญญาณไฟจราจรถี่มักทำให้เกิดการจราจรติดขัดในช่วงเวลาเร่งด่วนมากกว่าถนนสายอื่น", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์ระหว่างลักษณะถนนกับปัญหาการจราจรจากการสังเกตหลายกรณี จึงเป็นความรู้", difficulty:3},
   {id:16, text:"นักเรียนตัดสินใจออกจากบ้านเร็วขึ้น 30 นาทีในวันที่มีฝนตกเพื่อหลีกเลี่ยงรถติด", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องแนวโน้มการจราจรมาใช้ตัดสินใจปรับพฤติกรรมให้เหมาะสม จึงเป็นปัญญา", difficulty:4},
-  // --- 5. การซื้อสินค้า ---
   {id:17, text:"น้ำมันพืชขวดนี้ติดป้ายราคา 65 บาท", category:"data", explanation:"เป็นตัวเลขราคาที่ระบุไว้ตรงๆ ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
   {id:18, text:"ราคาน้ำมันพืชเฉลี่ยในเดือนนี้สูงกว่าเดือนที่แล้วร้อยละ 10", category:"information", explanation:"เกิดจากการคำนวณและเปรียบเทียบราคาในแต่ละเดือน ทำให้เห็นแนวโน้มที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:19, text:"เมื่อราคาน้ำมันปาล์มดิบในตลาดโลกสูงขึ้น ราคาน้ำมันพืชในประเทศมักปรับตัวสูงขึ้นตามไปด้วย", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์เชิงเหตุผลระหว่างปัจจัยตลาดโลกกับราคาภายในประเทศ จึงเป็นความรู้", difficulty:3},
   {id:20, text:"แม่บ้านตัดสินใจซื้อน้ำมันพืชในปริมาณมากช่วงที่มีโปรโมชันลดราคาเพื่อประหยัดค่าใช้จ่ายในระยะยาว", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องแนวโน้มราคามาประกอบการตัดสินใจวางแผนการซื้อ จึงเป็นปัญญา", difficulty:4},
-  // --- 6. สื่อสังคมออนไลน์ ---
   {id:21, text:"โพสต์ประชาสัมพันธ์กิจกรรมของโรงเรียนมียอดไลก์ 350 ครั้ง", category:"data", explanation:"เป็นตัวเลขที่นับได้โดยตรงจากระบบ ยังไม่ผ่านการวิเคราะห์เพิ่มเติม จึงเป็นข้อมูล", difficulty:1},
   {id:22, text:"ยอดไลก์เฉลี่ยของโพสต์ในเพจนี้เดือนนี้เพิ่มขึ้นร้อยละ 15 จากเดือนก่อน", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยและเปรียบเทียบระหว่างเดือน ทำให้เห็นการเปลี่ยนแปลงที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:23, text:"โพสต์ที่มีภาพประกอบมักได้รับยอดการมีส่วนร่วมมากกว่าโพสต์ที่มีแต่ข้อความล้วน", category:"knowledge", explanation:"เป็นข้อสรุปจากการวิเคราะห์รูปแบบความสัมพันธ์ระหว่างลักษณะโพสต์กับการมีส่วนร่วมของผู้ติดตาม จึงเป็นความรู้", difficulty:3},
   {id:24, text:"แอดมินเพจตัดสินใจใส่ภาพประกอบในทุกโพสต์นับจากนี้เพื่อเพิ่มการมีส่วนร่วมของผู้ติดตาม", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องรูปแบบโพสต์มาใช้กำหนดแนวทางปฏิบัติในการทำเพจ จึงเป็นปัญญา", difficulty:4},
-  // --- 7. สิ่งแวดล้อม ---
   {id:25, text:"อาสาสมัครเก็บขยะจากชายหาดได้น้ำหนักรวม 45 กิโลกรัมในวันนี้", category:"data", explanation:"เป็นตัวเลขที่ชั่งวัดได้โดยตรง ยังไม่ผ่านการตีความ จึงเป็นข้อมูล", difficulty:1},
   {id:26, text:"ปริมาณขยะบนชายหาดแห่งนี้ในฤดูฝนมากกว่าฤดูแล้งโดยเฉลี่ยร้อยละ 30", category:"information", explanation:"เกิดจากการเปรียบเทียบข้อมูลปริมาณขยะระหว่างสองฤดูกาล ทำให้เห็นความแตกต่างที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:27, text:"ขยะพลาสติกที่ถูกทิ้งตามแม่น้ำมักไหลลงสู่ทะเลมากขึ้นในช่วงฤดูฝนที่มีน้ำหลาก", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์ระหว่างฤดูกาลกับการเคลื่อนที่ของขยะจากการสังเกตหลายปี จึงเป็นความรู้", difficulty:3},
   {id:28, text:"เทศบาลตัดสินใจติดตั้งตาข่ายดักขยะบริเวณปากแม่น้ำก่อนเข้าสู่ฤดูฝนของทุกปี", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องแนวโน้มขยะตามฤดูกาลมาวางแผนป้องกันปัญหาล่วงหน้า จึงเป็นปัญญา", difficulty:4},
-  // --- 8. การใช้พลังงาน ---
   {id:29, text:"มิเตอร์ไฟฟ้าของบ้านหลังนี้แสดงค่าการใช้ไฟเดือนนี้ 320 หน่วย", category:"data", explanation:"เป็นค่าที่อ่านได้จากมิเตอร์โดยตรง ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
   {id:30, text:"ค่าไฟฟ้าเฉลี่ยของบ้านหลังนี้ในช่วงหน้าร้อนสูงกว่าหน้าหนาวร้อยละ 40", category:"information", explanation:"เกิดจากการเปรียบเทียบค่าไฟระหว่างสองฤดูกาล ทำให้เห็นความแตกต่างที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:31, text:"การเปิดเครื่องปรับอากาศต่อเนื่องเป็นเวลานานทำให้ค่าไฟฟ้าเพิ่มขึ้นอย่างมีนัยสำคัญ", category:"knowledge", explanation:"เป็นข้อสรุปเชิงเหตุผลจากการวิเคราะห์ความสัมพันธ์ระหว่างพฤติกรรมการใช้ไฟกับค่าไฟฟ้า จึงเป็นความรู้", difficulty:3},
   {id:32, text:"ครอบครัวตัดสินใจตั้งเวลาปิดเครื่องปรับอากาศอัตโนมัติหลังเที่ยงคืนเพื่อประหยัดค่าไฟ", category:"wisdom", explanation:"เป็นการนำความรู้เรื่องผลของการใช้เครื่องปรับอากาศมาใช้กำหนดแนวทางปฏิบัติเพื่อประหยัดพลังงาน จึงเป็นปัญญา", difficulty:4},
-  // --- 9. ข้อมูลจากเซนเซอร์ ---
   {id:33, text:"เซนเซอร์วัดความชื้นในดินของแปลงผักอ่านค่าได้ 35 เปอร์เซ็นต์", category:"data", explanation:"เป็นค่าที่เซนเซอร์ตรวจวัดได้โดยตรง ยังไม่ผ่านการตีความ จึงเป็นข้อมูล", difficulty:1},
   {id:34, text:"ค่าความชื้นในดินเฉลี่ยตลอดสัปดาห์นี้ต่ำกว่าเกณฑ์ที่พืชต้องการอยู่ร้อยละ 10", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยและเปรียบเทียบกับเกณฑ์มาตรฐาน ทำให้ข้อมูลมีความหมายในการใช้งาน จึงเป็นสารสนเทศ", difficulty:2},
   {id:35, text:"เมื่อความชื้นในดินต่ำกว่า 30 เปอร์เซ็นต์ติดต่อกันหลายวัน พืชมักแสดงอาการเหี่ยวเฉา", category:"knowledge", explanation:"เป็นการเข้าใจความสัมพันธ์เชิงเหตุผลระหว่างความชื้นในดินกับสุขภาพของพืชจากการสังเกตซ้ำๆ จึงเป็นความรู้", difficulty:3},
   {id:36, text:"เกษตรกรตัดสินใจตั้งระบบรดน้ำอัตโนมัติให้ทำงานทันทีเมื่อค่าความชื้นในดินต่ำกว่าเกณฑ์ที่กำหนด", category:"wisdom", explanation:"เป็นการใช้ความรู้เรื่องผลกระทบของความชื้นต่อพืชมาออกแบบระบบและตัดสินใจปฏิบัติ จึงเป็นปัญญา", difficulty:4},
-  // --- 10. การวิเคราะห์พฤติกรรม ---
   {id:37, text:"ระบบบันทึกว่าผู้ใช้คนหนึ่งเปิดแอปพลิเคชันนี้ 12 ครั้งในวันนี้", category:"data", explanation:"เป็นตัวเลขที่ระบบบันทึกไว้โดยตรง ยังไม่ผ่านการวิเคราะห์ จึงเป็นข้อมูล", difficulty:1},
   {id:38, text:"ผู้ใช้คนนี้เปิดแอปพลิเคชันเฉลี่ย 10 ครั้งต่อวันในช่วง 1 เดือนที่ผ่านมา", category:"information", explanation:"เกิดจากการคำนวณค่าเฉลี่ยจากข้อมูลการใช้งานหลายวัน ทำให้เห็นพฤติกรรมที่มีความหมาย จึงเป็นสารสนเทศ", difficulty:2},
   {id:39, text:"ผู้ใช้ที่เปิดแอปพลิเคชันบ่อยในช่วงเย็นมักใช้เวลาอยู่ในแอปนานกว่าผู้ใช้ในช่วงเวลาอื่น", category:"knowledge", explanation:"เป็นข้อสรุปจากการวิเคราะห์ความสัมพันธ์ระหว่างช่วงเวลาการใช้งานกับระยะเวลาที่ใช้แอป จึงเป็นความรู้", difficulty:3},
@@ -412,7 +384,6 @@ const LEVEL_INFO = {
   4:{title:"ด่านที่ 4: การตัดสินใจด้วยปัญญา", desc:"ด่านสุดท้าย! จำแนกให้ครบทั้ง 4 ระดับในสถานการณ์ใกล้ตัว มีเวลาเพียง 20 วินาทีต่อข้อ สู้ๆ นะ!"}
 };
 
-/* ===================== 2. ตัวละครเดต้า (วาดด้วย SVG ล้วน) ===================== */
 function dataCharacterSVG(mood){
   let mouth;
   if(mood==='happy') mouth = `<path d="M40 70 Q55 85 70 70" stroke="#0ff" stroke-width="4" fill="none" stroke-linecap="round"/>`;
@@ -438,12 +409,10 @@ function dataCharacterSVG(mood){
 function setDataMood(mood){
   document.querySelectorAll('.data-mood-target').forEach(el=>el.innerHTML = dataCharacterSVG(mood));
   const corner = document.getElementById('dataCornerImg');
-  // corner ใช้ svg เป็น background image แบบ inline (data URI) เพื่อใช้กับ <img>
   const svgStr = dataCharacterSVG(mood);
   corner.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
 }
 
-/* ===================== 3. ตัวแปรสถานะเกม ===================== */
 const state = {
   screen:'start', playerName:'', controlMode:null, soundOn:true,
   score:0, energy:5, level:1, questionInLevel:0, totalQuestionIndex:0, questionsAttempted:0,
@@ -457,12 +426,11 @@ const state = {
 };
 let pausedByUser=false, guidePrevPause=false;
 let elapsedTimerId=null;
+let lockHideTimer=null; // เก็บ timeout ของการซ่อนการ์ดหลังล็อกเข้าโซน (แก้บั๊ก #2)
 
-/* ===================== 4. ยูทิลิตี้ ===================== */
 function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 
-/* ===================== 5. เลือกการ์ดตามด่าน ===================== */
 function pickLevelCards(level){
   const avail = c => !state.usedCardIds.has(c.id);
   let picks=[];
@@ -483,7 +451,6 @@ function pickLevelCards(level){
   return picks;
 }
 
-/* ===================== 6. เสียง (Web Audio API สังเคราะห์เอง) ===================== */
 let audioCtx=null;
 function ensureAudio(){
   if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
@@ -521,7 +488,7 @@ function toggleSound(){
   document.querySelectorAll('.sound-toggle-btn').forEach(b=>b.textContent = state.soundOn?'🔊':'🔇');
 }
 
-/* ===================== 7. พื้นหลังอนุภาค + Particle Effect ===================== */
+/* ===== พื้นหลัง/เอฟเฟกต์: แยก 2 canvas อย่างถูกต้อง (แก้บั๊ก #6) ===== */
 const bgCanvas=document.getElementById('bgCanvas'), fxCanvas=document.getElementById('fxCanvas');
 const arVideoCanvas=document.getElementById('arVideoCanvas'), arCursorCanvas=document.getElementById('arCursorCanvas');
 let bgParticles=[], fxParticles=[];
@@ -541,14 +508,19 @@ function spawnParticles(category){
     fxParticles.push({x:cx,y:cy,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,life:1,color});
   }
 }
-function fxLoop(){
-  const ctx=fxCanvas.getContext('2d');
+function bgLoop(){
+  const ctx=bgCanvas.getContext('2d');
   ctx.clearRect(0,0,innerWidth,innerHeight);
   bgParticles.forEach(p=>{
     p.y+=p.vy; if(p.y<-5) p.y=innerHeight+5;
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
     ctx.fillStyle=`rgba(125,211,252,${p.a})`; ctx.fill();
   });
+  requestAnimationFrame(bgLoop);
+}
+function fxLoop(){
+  const ctx=fxCanvas.getContext('2d');
+  ctx.clearRect(0,0,innerWidth,innerHeight);
   fxParticles.forEach(p=>{
     p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=.02;
     ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2);
@@ -566,7 +538,7 @@ function resizeAllCanvases(){
   });
 }
 
-/* ===================== 8. ระบบ AR (MediaPipe Hands) ===================== */
+/* ===== ระบบ AR (MediaPipe Hands) ===== */
 const arVideo=document.getElementById('arVideo');
 let hands=null, arActive=false;
 let smoothed={x:0,y:0,inited:false};
@@ -580,8 +552,9 @@ async function initAR(){
     document.getElementById('btnUsePointerFallback').onclick=()=>startGame('pointer');
     return false;
   }
+  let stream=null;
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480},audio:false});
+    stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480},audio:false});
     arVideo.srcObject = stream; await arVideo.play();
     if(typeof Hands==='undefined') throw new Error('MediaPipe not loaded');
     hands = new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
@@ -592,6 +565,9 @@ async function initAR(){
     return true;
   }catch(err){
     console.warn('AR init failed', err);
+    // แก้บั๊ก #4: ปิดกล้องให้เรียบร้อยถ้า init ล้มเหลวระหว่างทาง
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+    if(arVideo.srcObject){ arVideo.srcObject.getTracks().forEach(t=>t.stop()); arVideo.srcObject=null; }
     document.getElementById('arFallbackBox').style.display='block';
     document.getElementById('arFallbackBox').innerHTML = '⚠️ ไม่สามารถเปิดกล้องหรือโหลดระบบตรวจจับมือได้ (อาจถูกปฏิเสธสิทธิ์กล้อง) <br><button class="btn-secondary" id="btnUsePointerFallback2" style="margin-top:8px;">🖱️ ใช้เมาส์/สัมผัสแทน</button>';
     document.getElementById('btnUsePointerFallback2').onclick=()=>startGame('pointer');
@@ -622,8 +598,8 @@ function onHandsResults(results){
 
   if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
     document.getElementById('noHandMsg').style.display='none';
-    const lm = results.multiHandLandmarks[0][8]; // ปลายนิ้วชี้
-    const rawX = (1-lm.x) * innerWidth; // สลับซ้ายขวาให้ตรงกับภาพ Mirror
+    const lm = results.multiHandLandmarks[0][8];
+    const rawX = (1-lm.x) * innerWidth;
     const rawY = lm.y * innerHeight;
     if(!smoothed.inited){ smoothed.x=rawX; smoothed.y=rawY; smoothed.inited=true; }
     else{
@@ -666,14 +642,19 @@ function processDwell(x,y,ctx){
     ctx.beginPath(); ctx.arc(x,y,22,-Math.PI/2,-Math.PI/2+progress*Math.PI*2);
     ctx.strokeStyle='#7dfcff'; ctx.lineWidth=4; ctx.stroke();
     if(progress>=1){
-      if(arHoldState==='idle'){ arHoldState='holding'; playSound('select'); }
+      if(arHoldState==='idle'){ arHoldState='holding'; playSound('select'); setZonesActive(true); }
       else { handleDrop(target); arHoldState='idle'; }
       dwellTarget=null;
     }
   } else { dwellTarget=target; dwellStart=performance.now(); }
 }
 
-/* ===================== 9. ลาก/วาง ด้วยเมาส์และสัมผัส (Pointer Events) ===================== */
+/* ===== ไฮไลต์โซนพีระมิดเมื่อมีการเลือกการ์ด (แก้บั๊ก #8: ใช้ .zone-active จริง) ===== */
+function setZonesActive(active){
+  document.querySelectorAll('.pyramid-zone').forEach(z=>z.classList.toggle('zone-active', active));
+}
+
+/* ===== ลาก/วาง ด้วยเมาส์และสัมผัส ===== */
 function setupPointerControls(){
   const cardEl = document.getElementById('activeCard');
   let dragOffsetX=0, dragOffsetY=0, startX=0, startY=0, moved=false;
@@ -685,6 +666,7 @@ function setupPointerControls(){
     dragOffsetX=e.clientX-r.left; dragOffsetY=e.clientY-r.top;
     startX=e.clientX; startY=e.clientY; moved=false; state.isDragging=true;
     cardEl.classList.add('dragging');
+    setZonesActive(true);
   });
   cardEl.addEventListener('pointermove',(e)=>{
     if(!state.isDragging) return;
@@ -700,21 +682,26 @@ function setupPointerControls(){
     if(moved){
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const zone = el && el.closest && el.closest('.pyramid-zone');
+      setZonesActive(false);
       if(zone){ handleDrop(zone.dataset.category); } else { resetCardPosition(); }
     } else {
       cardEl.classList.toggle('selected');
       state.selectedForTap = cardEl.classList.contains('selected');
+      setZonesActive(state.selectedForTap);
     }
   });
   cardEl.addEventListener('keydown',(e)=>{
-    if(e.key==='Enter'||e.key===' '){ cardEl.classList.toggle('selected'); state.selectedForTap=cardEl.classList.contains('selected'); }
+    if(e.key==='Enter'||e.key===' '){
+      cardEl.classList.toggle('selected'); state.selectedForTap=cardEl.classList.contains('selected');
+      setZonesActive(state.selectedForTap);
+    }
   });
 
   document.querySelectorAll('.pyramid-zone').forEach(zone=>{
     zone.addEventListener('pointerup', ()=>{
       if(state.selectedForTap && !state.isProcessingAnswer && !state.isPaused){
         handleDrop(zone.dataset.category);
-        state.selectedForTap=false; cardEl.classList.remove('selected');
+        state.selectedForTap=false; cardEl.classList.remove('selected'); setZonesActive(false);
       }
     });
     zone.addEventListener('keydown',(e)=>{
@@ -729,7 +716,6 @@ function resetCardPosition(){
   cardEl.style.position=''; cardEl.style.left=''; cardEl.style.top=''; cardEl.style.transform='';
 }
 
-/* ===================== 10. คำใบ้ Socratic ===================== */
 function generateHint(card, attempt){
   const hints = {
     data:"ลองสังเกตดูว่า...นี่คือค่าดิบที่เก็บได้โดยตรง ยังไม่ผ่านการคำนวณหรือสรุปใดๆ ใช่หรือไม่?",
@@ -756,7 +742,7 @@ function useHint(){
   playSound('select');
 }
 
-/* ===================== 11. ตรรกะหลักของเกม ===================== */
+/* ===== ตรรกะหลักของเกม ===== */
 function startGame(mode){
   state.controlMode=mode;
   Object.assign(state,{
@@ -789,15 +775,18 @@ function loadQuestion(){
   if(state.timeLimit>0) startQuestionTimer(); else { document.getElementById('hudTimer').style.display='none'; }
 }
 function renderCard(card){
+  clearTimeout(lockHideTimer); // แก้บั๊ก #2: ยกเลิกการซ่อนของการ์ดข้อก่อนหน้า
   const el=document.getElementById('activeCard');
   el.style.position=''; el.style.left=''; el.style.top=''; el.style.transform=''; el.style.opacity='1'; el.style.transition='';
   el.classList.remove('selected','shake'); el.style.display='flex';
   document.getElementById('cardText').textContent = card.text;
   arHoldState='idle'; dwellTarget=null; state.selectedForTap=false;
+  setZonesActive(false);
 }
 function handleDrop(category){
   if(state.isProcessingAnswer || state.isPaused) return;
   const card = state.currentCard; if(!card) return;
+  setZonesActive(false);
   if(category === card.category){
     state.isProcessingAnswer=true; clearQuestionTimer();
     const points = state.wrongAttemptsThisQuestion===0?100: state.wrongAttemptsThisQuestion===1?70:50;
@@ -810,8 +799,9 @@ function handleDrop(category){
     playSound('correct'); if(comboBonus>0) playSound('combo');
     spawnParticles(category); setDataMood('happy');
     lockCardIntoZone(category);
-    showFeedback(true, `ยอดเยี่ยม! จัดอยู่ในหมวด ${CATEGORY_META[category].label}`, card.explanation, comboBonus, ()=>{
-      state.questionInLevel++; state.totalQuestionIndex++; setDataMood('neutral'); loadQuestion();
+    showFeedback('correct', `ยอดเยี่ยม! จัดอยู่ในหมวด ${CATEGORY_META[category].label}`, card.explanation, comboBonus, ()=>{
+      state.questionInLevel++; state.totalQuestionIndex++; setDataMood('neutral');
+      advanceAfterFeedback();
     });
   } else {
     state.wrongAttemptsThisQuestion++;
@@ -820,13 +810,23 @@ function handleDrop(category){
     state.categoryWrongCount[card.category]++;
     logWrongIfNeeded(card);
     playSound('wrong'); setDataMood('encourage');
-    resetCardPosition();
-    document.getElementById('activeCard').classList.add('shake');
-    setTimeout(()=>document.getElementById('activeCard').classList.remove('shake'),500);
     updateHUD();
-    showHint(generateHint(card, state.wrongAttemptsThisQuestion), state.wrongAttemptsThisQuestion>=2);
-    if(state.energy<=0){ setTimeout(()=>endGame(),900); }
+    // แก้บั๊ก #1: จัดการกรณีพลังงานหมดภายใน flow เดียวกัน ไม่ใช้ setTimeout แยก
+    if(state.energy<=0){
+      state.isProcessingAnswer=true; clearQuestionTimer();
+      lockCardIntoZone(card.category);
+      showFeedback('gameover', '⚡ พลังงานหมดแล้ว!', `คำตอบที่ถูกต้องคือ ${CATEGORY_META[card.category].label} — ${card.explanation}`, 0, ()=> endGame());
+    } else {
+      resetCardPosition();
+      document.getElementById('activeCard').classList.add('shake');
+      setTimeout(()=>document.getElementById('activeCard').classList.remove('shake'),500);
+      showHint(generateHint(card, state.wrongAttemptsThisQuestion), state.wrongAttemptsThisQuestion>=2);
+    }
   }
+}
+function advanceAfterFeedback(){
+  if(state.energy<=0){ endGame(); return; }
+  loadQuestion();
 }
 function logWrongIfNeeded(card){
   if(!state.wrongLog.find(w=>w.id===card.id)){
@@ -847,10 +847,10 @@ function lockCardIntoZone(category){
   });
   const chip=document.createElement('div'); chip.className='zone-chip'; chip.textContent='✓';
   zone.querySelector('.zone-collected').appendChild(chip);
-  setTimeout(()=>{ el.style.display='none'; },520);
+  clearTimeout(lockHideTimer);
+  lockHideTimer=setTimeout(()=>{ el.style.display='none'; },520);
 }
 
-/* ---- ตัวจับเวลาต่อข้อ ---- */
 function startQuestionTimer(){
   clearQuestionTimer();
   state.timeRemaining = state.timeLimit;
@@ -870,14 +870,13 @@ function handleTimeout(){
   state.categoryWrongCount[card.category]++; logWrongIfNeeded(card); state.needRetry++;
   playSound('wrong'); setDataMood('encourage');
   lockCardIntoZone(card.category);
-  showFeedback(false, 'หมดเวลา!', `คำตอบที่ถูกต้องคือ ${CATEGORY_META[card.category].label} — ${card.explanation}`, 0, ()=>{
+  updateHUD();
+  showFeedback('timeout', 'หมดเวลา!', `คำตอบที่ถูกต้องคือ ${CATEGORY_META[card.category].label} — ${card.explanation}`, 0, ()=>{
+    if(state.energy<=0){ endGame(); return; } // แก้บั๊ก #1
     state.questionInLevel++; state.totalQuestionIndex++; setDataMood('neutral'); loadQuestion();
   });
-  updateHUD();
-  if(state.energy<=0) setTimeout(()=>endGame(),900);
 }
 
-/* ---- จบด่าน ---- */
 function finishLevel(){
   clearQuestionTimer();
   addScore(100);
@@ -889,7 +888,6 @@ function finishLevel(){
   });
 }
 
-/* ===================== 12. HUD / UI ===================== */
 function updateHUD(){
   document.getElementById('hudName').textContent = state.playerName;
   document.getElementById('hudScore').textContent = state.score;
@@ -898,6 +896,7 @@ function updateHUD(){
   document.getElementById('hudCombo').textContent = `Combo ${state.combo}`;
   document.getElementById('hudEnergy').innerHTML = Array.from({length:5}).map((_,i)=>`<span class="energy-icon ${i<state.energy?'full':'empty'}">⬡</span>`).join('');
   document.getElementById('hintCount').textContent = `คำใบ้ ${state.hintsUsedThisLevel}/2`;
+  document.getElementById('btnHint').disabled = state.hintsUsedThisLevel>=2;
 }
 function updateTimerUI(){
   const t=document.getElementById('hudTimer');
@@ -928,9 +927,9 @@ function showLevelComplete(level, noLoss, cb){
   box.style.display='flex'; state.isPaused=true;
   document.getElementById('levelNextBtn').onclick=()=>{ box.style.display='none'; state.isPaused=false; cb(); };
 }
-function showFeedback(correct, title, detail, comboBonus, cb){
+function showFeedback(mode, title, detail, comboBonus, cb){
   const box=document.getElementById('feedbackBox');
-  box.className='feedback-box '+(correct?'ok':'timeout');
+  box.className='feedback-box '+mode; // 'correct' | 'timeout' | 'gameover'
   box.innerHTML = `<div class="glass" style="padding:24px;max-width:520px;"><h3>${title}</h3><p>${detail}</p>${comboBonus?`<p class="combo-bonus">🔥 โบนัสคอมโบ +${comboBonus}</p>`:''}<button id="feedbackNext" class="btn-primary">ต่อไป</button></div>`;
   box.style.display='flex';
   let done=false;
@@ -939,7 +938,6 @@ function showFeedback(correct, title, detail, comboBonus, cb){
   clearTimeout(window._fbTimer); window._fbTimer=setTimeout(proceed,4000);
 }
 
-/* ===================== 13. หยุดเกม / คู่มือ ===================== */
 function togglePause(){
   if(state.screen!=='game') return;
   pausedByUser=!pausedByUser; state.isPaused=pausedByUser;
@@ -954,7 +952,6 @@ function closeModal(id){
   if(state.screen==='game') state.isPaused = guidePrevPause;
 }
 
-/* ===================== 14. จบเกม / รีวิว ===================== */
 function endGame(){
   clearQuestionTimer(); stopElapsedTimer(); stopCamera();
   state.screen='end';
@@ -1007,14 +1004,12 @@ function renderReviewList(){
     </div>`).join('');
 }
 
-/* ===================== 15. เปลี่ยนหน้าจอ ===================== */
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   state.screen = id==='gameScreen'?'game': id==='endScreen'?'end':'start';
 }
 
-/* ===================== 16. ตั้งค่าเริ่มต้น + Event Binding ===================== */
 function captureName(){
   const v = document.getElementById('nameInput').value.trim();
   state.playerName = v || 'นักสำรวจข้อมูล';
@@ -1058,18 +1053,28 @@ function attachAllEvents(){
     togglePause(); stopCamera(); stopElapsedTimer(); clearQuestionTimer(); showScreen('startScreen');
   });
 
-  document.getElementById('btnReplay').addEventListener('click', ()=> startGame(state.controlMode||'pointer'));
+  // แก้บั๊ก #3: replay โหมด AR ต้องขอกล้องใหม่ ไม่ใช่ startGame('ar') ตรงๆ
+  document.getElementById('btnReplay').addEventListener('click', async ()=>{
+    if(state.controlMode==='ar'){
+      ensureAudio();
+      const ok = await initAR();
+      startGame(ok ? 'ar' : 'pointer');
+    } else {
+      startGame(state.controlMode||'pointer');
+    }
+  });
   document.getElementById('btnHome').addEventListener('click', ()=> showScreen('startScreen'));
   document.getElementById('btnReview').addEventListener('click', ()=> openModal('reviewModal'));
 
   setupPointerControls();
 
   document.addEventListener('keydown',(e)=>{
+    // แก้บั๊ก #5: Escape ต้องใช้ได้แม้กำลัง pause อยู่
+    if(e.key==='Escape' && state.screen==='game'){ togglePause(); return; }
     if(state.screen!=='game' || state.isPaused || state.isProcessingAnswer) return;
     const map={'1':'data','2':'information','3':'knowledge','4':'wisdom'};
     if(map[e.key]) handleDrop(map[e.key]);
     if(e.key==='h'||e.key==='H') useHint();
-    if(e.key==='Escape') togglePause();
   });
 
   window.addEventListener('resize', debounce(resizeAllCanvases,200));
@@ -1080,6 +1085,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   loadSettings();
   initBgParticles();
   resizeAllCanvases();
+  requestAnimationFrame(bgLoop);
   requestAnimationFrame(fxLoop);
   attachAllEvents();
 });

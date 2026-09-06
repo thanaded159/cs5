@@ -952,11 +952,11 @@
       setTimeout(()=>$("modal-close").focus(),30);
     }
 
-    function closeModal() {
+    function closeModal(shouldStopCamera = true) {
       $("modal-layer").classList.add("hidden");
       if (!$("game-view").classList.contains("hidden") && !state.locked) state.paused=false;
       
-      if (arStream) {
+      if (arStream && shouldStopCamera !== false) {
         arStream.getTracks().forEach(track => track.stop());
         arStream = null;
       }
@@ -1008,7 +1008,7 @@
         startBtn.textContent = "เริ่มภารกิจ AR";
         startBtn.className = "neo-button";
         startBtn.onclick = () => {
-          closeModal(); 
+          closeModal(false); // <--- ปิดหน้าต่าง แต่ "ไม่ปิดกล้อง" (ส่งค่า false)
           startGame();
         };
         $("modal-actions").prepend(startBtn);
@@ -1078,34 +1078,33 @@
     $("pause-button").addEventListener("click",pauseGame);
     $("sound-start").addEventListener("click",toggleSound);
     $("sound-game").addEventListener("click",toggleSound);
-    $("modal-close").addEventListener("click",closeModal);
+    $("modal-close").addEventListener("click",() => closeModal(true));
     $("play-again").addEventListener("click",startGame);
+    
     $("home-button").addEventListener("click",()=>{
       clearInterval(state.timer);
       $("result-view").classList.add("hidden");
       $("game-view").classList.add("hidden");
       $("start-view").classList.remove("hidden");
       setRobot("");
+      
+      // ปิดกล้องเมื่อกลับสู่หน้าหลัก
+      if (arStream) {
+        arStream.getTracks().forEach(track => track.stop());
+        arStream = null;
+      }
     });
+    
     $("review-button").addEventListener("click",()=>{
       const wrong=state.review.filter(item=>item.outcome!=="ถูก");
       const content=wrong.length
         ? `<div class="space-y-3">${wrong.map(item=>`<div class="rounded-xl border border-orange-300/25 bg-orange-950/20 p-3"><b class="text-orange-200">${item.text}</b><p class="mt-1 mb-0 text-sm">คำตอบ: ${categoryThai[item.category]}<br>${item.explanation}</p></div>`).join("")}</div>`
         : "<p>ยอดเยี่ยม! คุณไม่มีข้อที่ต้องทบทวนในรอบนี้</p>";
-      openModal("REVIEW","ทบทวนข้อที่ตอบผิด",content,[{label:"ปิด",primary:true,action:closeModal}]);
+      openModal("REVIEW","ทบทวนข้อที่ตอบผิด",content,[{label:"ปิด",primary:true,action:() => closeModal(true)}]);
     });
 
     document.addEventListener("visibilitychange",()=>{
       if (document.hidden && !$("game-view").classList.contains("hidden")) state.paused=true;
     });
 
-    document.addEventListener("keydown",e=>{
-      if (e.key==="Escape" && !$("modal-layer").classList.contains("hidden")) closeModal();
-      if (e.key.toLowerCase()==="h" && !$("game-view").classList.contains("hidden")) useHint();
-    });
-
-    updateSoundButtons();
-    if (window.lucide) lucide.createIcons();
-  </script>
- 
-</body></html>
+    document.addEventListener("keydo

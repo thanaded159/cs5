@@ -1,722 +1,1111 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>ภารกิจพิชิตพีระมิด DIKW | DATA's DIKW Sorting Quest</title>
-<style>
-/* Reset & Base Styles */
-* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-html, body { 
-  height: 100%; 
-  width: 100%; 
-  overflow: hidden; 
-  font-family: 'Segoe UI', 'Sarabun', Tahoma, sans-serif; 
-  background: linear-gradient(160deg, #0b1026 0%, #1a1044 40%, #0e1c3f 70%, #150a30 100%); 
-  color: #e6f1ff; 
-  position: relative; 
-}
-
-/* Fixed Canvas Layering Stack */
-#bgCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-#arVideoCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; opacity: 0.28; transform: scaleX(-1); }
-#fxCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
-#arCursorCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; pointer-events: none; }
-
-/* UI Container Structure Layer */
-.app-container { 
-  position: relative; 
-  z-index: 10; 
-  width: 100%; 
-  height: 100vh; 
-  height: 100dvh; 
-  display: flex; 
-  flex-direction: column; 
-  justify-content: space-between; 
-  align-items: center; 
-  padding: 15px; 
-  box-sizing: border-box; 
-}
-
-/* Global Buttons & Accessibility Focus */
-button { font-family: inherit; cursor: pointer; border: none; outline: none; transition: all 0.2s ease; }
-button:focus-visible, .holo-card:focus-visible, .pyramid-zone:focus-visible { outline: 3px solid #7dfcff; outline-offset: 2px; }
-
-/* Screen Views Management */
-.screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; z-index: 20; text-align: center; }
-.screen.active { display: flex; }
-
-.title-glow { 
-  font-size: 2.2rem; 
-  font-weight: 800; 
-  text-transform: uppercase; 
-  letter-spacing: 2px; 
-  color: #7dfcff; 
-  text-shadow: 0 0 15px rgba(125,252,255,0.6), 0 0 30px rgba(125,252,255,0.3); 
-  margin-bottom: 10px; 
-}
-.subtitle { font-size: 1.1rem; color: #b0c4de; margin-bottom: 25px; }
-
-.btn-group { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-top: 15px; }
-.btn { 
-  padding: 12px 28px; 
-  font-size: 1rem; 
-  font-weight: 700; 
-  border-radius: 30px; 
-  background: linear-gradient(135deg, #00d2ff, #3a7bd5); 
-  color: #fff; 
-  box-shadow: 0 4px 15px rgba(0,210,255,0.4); 
-  text-transform: uppercase; 
-  letter-spacing: 1px; 
-}
-.btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,210,255,0.6); }
-.btn-secondary { background: linear-gradient(135deg, #ff2a8d, #9a1f6e); box-shadow: 0 4px 15px rgba(255,42,141,0.4); }
-
-/* Top HUD Bar */
-.hud { 
-  width: 100%; 
-  max-width: 900px; 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  background: rgba(15, 23, 42, 0.75); 
-  backdrop-filter: blur(10px); 
-  padding: 12px 20px; 
-  border-radius: 16px; 
-  border: 1px solid rgba(125, 252, 255, 0.2); 
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3); 
-  margin-bottom: 10px; 
-}
-.hud-item { display: flex; flex-direction: column; align-items: center; }
-.hud-label { font-size: 0.75rem; color: #8a99ad; text-transform: uppercase; }
-.hud-value { font-size: 1.3rem; font-weight: bold; color: #7dfcff; }
-
-/* Main Gameplay Area */
-.game-layout { 
-  display: flex; 
-  flex-direction: row; 
-  width: 100%; 
-  max-width: 1000px; 
-  height: calc(100% - 90px); 
-  gap: 20px; 
-  justify-content: center; 
-  align-items: center; 
-}
-@media (max-width: 768px) {
-  .game-layout { flex-direction: column; }
-}
-
-/* Pyramid Levels Visual Layout */
-.pyramid-container { flex: 1; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 480px; justify-content: center; align-items: center; }
-.pyramid-zone { 
-  width: 100%; 
-  height: 65px; 
-  border-radius: 12px; 
-  border: 2px dashed rgba(125, 252, 255, 0.4); 
-  background: rgba(16, 26, 58, 0.6); 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  flex-direction: column; 
-  transition: all 0.3s ease; 
-  position: relative; 
-  cursor: pointer; 
-}
-.pyramid-zone.correct { border-style: solid; border-color: #00ff88; background: rgba(0, 255, 136, 0.25); }
-.pyramid-zone.wrong { border-style: solid; border-color: #ff3366; background: rgba(255, 51, 102, 0.25); }
-
-.zone-wisdom { width: 55%; border-color: #ffd700; color: #ffd700; }
-.zone-knowledge { width: 70%; border-color: #ff007f; color: #ff007f; }
-.zone-information { width: 85%; border-color: #00d2ff; color: #00d2ff; }
-.zone-data { width: 100%; border-color: #00ff88; color: #00ff88; }
-
-.zone-title { font-weight: 800; font-size: 0.95rem; letter-spacing: 1px; }
-.zone-num { position: absolute; left: 12px; font-size: 0.8rem; opacity: 0.7; }
-
-/* Card Display & Quick Drop Buttons */
-.card-area { flex: 1; width: 100%; max-width: 450px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; }
-.holo-card { 
-  width: 100%; 
-  background: rgba(20, 30, 65, 0.85); 
-  border: 2px solid #7dfcff; 
-  border-radius: 20px; 
-  padding: 25px; 
-  box-shadow: 0 0 25px rgba(125, 252, 255, 0.2); 
-  text-align: center; 
-  backdrop-filter: blur(12px); 
-}
-.holo-card-text { font-size: 1.2rem; font-weight: 600; line-height: 1.5; color: #ffffff; margin-bottom: 10px; }
-.holo-card-hint { font-size: 0.9rem; color: #ffd700; min-height: 20px; font-style: italic; }
-
-.quick-select-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
-.qs-btn { 
-  padding: 12px; 
-  background: rgba(255, 255, 255, 0.08); 
-  border: 1px solid rgba(255, 255, 255, 0.2); 
-  color: #fff; 
-  border-radius: 12px; 
-  font-weight: 600; 
-  font-size: 0.9rem; 
-}
-.qs-btn:hover { background: rgba(125, 252, 255, 0.2); border-color: #7dfcff; }
-
-/* Modal Layer Structure (Z-Index = 10000 Top Priority) */
-.modal-overlay { 
-  position: fixed; 
-  top: 0; 
-  left: 0; 
-  width: 100%; 
-  height: 100%; 
-  background: rgba(5, 10, 25, 0.85); 
-  backdrop-filter: blur(12px); 
-  display: none; 
-  align-items: center; 
-  justify-content: center; 
-  z-index: 10000; 
-}
-.modal-overlay.active { display: flex; }
-.modal-content { 
-  background: #121a36; 
-  border: 2px solid #7dfcff; 
-  border-radius: 24px; 
-  padding: 30px; 
-  width: 90%; 
-  max-width: 500px; 
-  text-align: center; 
-  box-shadow: 0 0 40px rgba(125,252,255,0.3); 
-  color: #fff; 
-  max-height: 85vh; 
-  overflow-y: auto; 
-}
-.modal-title { font-size: 1.8rem; font-weight: bold; color: #7dfcff; margin-bottom: 15px; }
-.review-item { text-align: left; background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #7dfcff; }
-</style>
-</head>
-<body>
-
-<canvas id="bgCanvas"></canvas>
-<canvas id="arVideoCanvas"></canvas>
-<canvas id="fxCanvas"></canvas>
-<canvas id="arCursorCanvas"></canvas>
-
-<div class="app-container">
-
-  <div id="startScreen" class="screen active">
-    <h1 class="title-glow">DATA's DIKW Sorting Quest</h1>
-    <p class="subtitle">ภารกิจพิชิตพีระมิดข้อมูล สารสนเทศ ความรู้ และภูมิปัญญา</p>
-    
-    <div style="max-width: 500px; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid rgba(125,252,255,0.2);">
-      <p style="margin-bottom: 10px; font-size: 0.95rem; line-height: 1.6; color: #d0e0ff;">
-        จำแนกคำโจทย์ให้อยู่ในชั้นพีระมิด DIKW ที่ถูกต้อง:<br>
-        1. <strong>Data</strong> (ข้อมูลดิบ) &nbsp;|&nbsp; 
-        2. <strong>Information</strong> (สารสนเทศ)<br>
-        3. <strong>Knowledge</strong> (ความรู้) &nbsp;|&nbsp; 
-        4. <strong>Wisdom</strong> (ภูมิปัญญา)
-      </p>
-    </div>
-
-    <div class="btn-group">
-      <button id="btnStartPointer" class="btn">เล่นด้วยเมาส์ / สัมผัส / ปุ่ม 1-4</button>
-      <button id="btnStartAR" class="btn btn-secondary">เปิดโหมดกล้อง AR (Gesture)</button>
-    </div>
-    
-    <div style="margin-top: 15px;">
-      <button id="btnOpenReviewStart" style="background: transparent; border: none; color: #7dfcff; text-decoration: underline; font-size: 0.9rem;">📖 สรุปบทเรียน DIKW</button>
-    </div>
-  </div>
-
-  <div id="gameScreen" class="screen">
-    <div class="hud">
-      <div class="hud-item">
-        <span class="hud-label">ข้อที่</span>
-        <span id="hudQuestionNum" class="hud-value">1/10</span>
-      </div>
-      <div class="hud-item">
-        <span class="hud-label">คะแนน</span>
-        <span id="hudScore" class="hud-value">0</span>
-      </div>
-      <div class="hud-item">
-        <span class="hud-label">เวลา</span>
-        <span id="hudTimer" class="hud-value">00:00</span>
-      </div>
-      <div style="display:flex; gap:8px;">
-        <button id="btnHint" style="padding: 8px 12px; background: rgba(255,215,0,0.2); border:1px solid #ffd700; color:#ffd700; border-radius:10px; font-weight:bold;">💡 ใบ้ (H)</button>
-        <button id="btnPause" style="padding: 8px 12px; background: rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:10px;">⏸️ พัก</button>
-      </div>
-    </div>
-
-    <div class="game-layout">
-      <div class="pyramid-container">
-        <div class="pyramid-zone zone-wisdom" data-level="wisdom" tabindex="0">
-          <span class="zone-num">[4]</span>
-          <span class="zone-title">WISDOM (ภูมิปัญญา)</span>
-        </div>
-        <div class="pyramid-zone zone-knowledge" data-level="knowledge" tabindex="0">
-          <span class="zone-num">[3]</span>
-          <span class="zone-title">KNOWLEDGE (ความรู้)</span>
-        </div>
-        <div class="pyramid-zone zone-information" data-level="information" tabindex="0">
-          <span class="zone-num">[2]</span>
-          <span class="zone-title">INFORMATION (สารสนเทศ)</span>
-        </div>
-        <div class="pyramid-zone zone-data" data-level="data" tabindex="0">
-          <span class="zone-num">[1]</span>
-          <span class="zone-title">DATA (ข้อมูลดิบ)</span>
-        </div>
-      </div>
-
-      <div class="card-area">
-        <div id="holoCard" class="holo-card">
-          <div id="cardCategory" style="font-size: 0.8rem; color: #7dfcff; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">คำถามจัดหมวดหมู่</div>
-          <div id="cardText" class="holo-card-text">กำลังโหลดโจทย์...</div>
-          <div id="cardHint" class="holo-card-hint"></div>
-        </div>
-
-        <div class="quick-select-btns">
-          <button class="qs-btn" onclick="handleDrop('data')">1️⃣ Data</button>
-          <button class="qs-btn" onclick="handleDrop('information')">2️⃣ Info</button>
-          <button class="qs-btn" onclick="handleDrop('knowledge')">3️⃣ Knowledge</button>
-          <button class="qs-btn" onclick="handleDrop('wisdom')">4️⃣ Wisdom</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<div id="pauseModal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 class="modal-title">พักการเล่น</h2>
-    <p style="margin-bottom: 20px; color:#d0e0ff;">เกมกำลังหยุดชั่วคราว พร้อมแล้วกดเล่นต่อได้เลย</p>
-    <div class="btn-group" style="flex-direction: column;">
-      <button id="btnResume" class="btn">▶️ เล่นต่อ</button>
-      <button id="btnReplay" class="btn btn-secondary">🔄 เริ่มใหม่</button>
-      <button id="btnHome" class="btn" style="background:#4a5568;">🏠 หน้าแรก</button>
-    </div>
-  </div>
-</div>
-
-<div id="gameOverModal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 class="modal-title">ภารกิจเสร็จสิ้น!</h2>
-    <div style="font-size: 3rem; margin: 15px 0;">🏆</div>
-    <p style="font-size: 1.2rem; margin-bottom: 10px;">คะแนนรวม: <span id="finalScore" style="color:#7dfcff; font-weight:bold;">0</span></p>
-    <p style="font-size: 0.95rem; color:#b0c4de; margin-bottom: 20px;">ใช้เวลาทั้งหมด: <span id="finalTime" style="color:#fff;">00:00</span></p>
-    <div class="btn-group">
-      <button id="btnRestartGame" class="btn">🎮 เล่นอีกครั้ง</button>
-      <button id="btnReview" class="btn btn-secondary">📖 ทบทวนเนื้อหา</button>
-    </div>
-  </div>
-</div>
-
-<div id="reviewModal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 class="modal-title">📖 สรุปทฤษฎี DIKW Pyramid</h2>
-    <div style="max-height: 350px; overflow-y: auto; text-align: left; padding-right: 5px;">
-      <div class="review-item">
-        <strong style="color:#00ff88;">1. Data (ข้อมูลดิบ):</strong> ข้อเท็จจริง ตัวเลข หรือสัญลักษณ์ที่ยังไม่ผ่านการประมวลผล เช่น "38.5°C", "100, 150, 120"
-      </div>
-      <div class="review-item">
-        <strong style="color:#00d2ff;">2. Information (สารสนเทศ):</strong> ข้อมูลที่ผ่านการจัดกลุ่มและระบุบริบท เช่น "ผู้ป่วยมีไข้สูง 38.5°C", "ยอดขายเฉลี่ยเดือนนี้คือ 123 ชิ้น"
-      </div>
-      <div class="review-item">
-        <strong style="color:#ff007f;">3. Knowledge (ความรู้):</strong> การประมวลสารสนเทศเข้ากับประสบการณ์ กฎเกณฑ์ หรือองค์ความรู้ เช่น "ไข้สูง 38.5°C ร่วมกับอาการไอ เสี่ยงเป็นไข้หวัดใหญ่"
-      </div>
-      <div class="review-item">
-        <strong style="color:#ffd700;">4. Wisdom (ภูมิปัญญา):</strong> การประยุกต์ใช้ความรู้เพื่อตัดสินใจหรือแก้ไขปัญหาในอนาคต เช่น "สั่งจ่ายยาพร้อมกักตัวผู้ป่วยเพื่อป้องกันการแพร่ระบาด"
-      </div>
-    </div>
-    <button onclick="closeModal('reviewModal')" class="btn" style="margin-top: 20px; width: 100%;">ปิดหน้าต่าง</button>
-  </div>
-</div>
-
-<script>
-/* Question Database */
-const QUESTIONS_DATABASE = [
-  { text: "ตัวเลข '38.5°C' บันทึกจากเครื่องวัดอุณหภูมิ", type: "data", hint: "ข้อเท็จจริงตัวเลขลอยๆ ที่ยังไม่มีบริบทอธิบาย" },
-  { text: "รายงานสรุปว่า 'คนไข้มีไข้สูงเกินเกณฑ์ปกติ (38.5°C)'", type: "information", hint: "มีการนำตัวเลขมาประมวลผลและใส่บริบท" },
-  { text: "แนวทางแพทย์ระบุว่า 'อาการไข้สูงร่วมกับไอ ร่างกายอ่อนเพลีย เสี่ยงติดเชื้อไข้หวัดใหญ่'", type: "knowledge", hint: "การสังเคราะห์สารสนเทศเข้ากับความรู้ทางแพทย์" },
-  { text: "การสั่งกักตัวผู้ป่วยและจ่ายยาต้านไวรัสเพื่อป้องกันการแพร่ระบาดในโรงพยาบาล", type: "wisdom", hint: "การตัดสินใจเชิงกลยุทธ์และการแก้ปัญหาจริง" },
-  { text: "รายการพิกัด GPS: '13.7563, 100.5018'", type: "data", hint: "ค่าพิกัดตัวเลขดิบที่ยังไม่ได้บอกว่าเป็นสถานที่ใด" },
-  { text: "หมุดบนแผนที่ระบุว่า 'ตำแหน่งปัจจุบันคือ อนุสาวรีย์ประชาธิปไตย กรุงเทพฯ'", type: "information", hint: "นำพิกัดมาแปลงเป็นชื่อสถานที่ที่เข้าใจได้" },
-  { text: "ข้อมูลจราจรชี้ว่า 'เส้นทางนี้การจราจรติดขัดสะสมในช่วงเวลา 17.00-19.00 น.'", type: "knowledge", hint: "การเข้าใจรูปแบบวิเคราะห์แนวโน้มจากข้อมูลอดีต" },
-  { text: "ระบบ AI ปรับสัญญาณไฟจราจรอัตโนมัติและแนะนำเส้นทางเลี่ยงเพื่อลดรถติด", type: "wisdom", hint: "ระบบตัดสินใจทำงานเพื่อแก้ไขปัญหาสภาพการจราจร" },
-  { text: "ชุดตัวเลขยอดขาย: 120, 150, 90, 200, 310", type: "data", hint: "ตัวเลขอันดับที่ยังไม่ได้สรุปผล" },
-  { text: "กราฟสรุป 'ยอดขายเดือนนี้เติบโตขึ้น 25% เมื่อเทียบกับเดือนที่แล้ว'", type: "information", hint: "นำตัวเลขมาเปรียบเทียบและสรุปผลเปรียบเทียบ" }
-];
-
-/* Game State Variable */
-let state = {
-  screen: 'startScreen',
-  controlMode: 'pointer',
-  questionIndex: 0,
-  score: 0,
-  questions: [],
-  isPaused: false,
-  isProcessingAnswer: false,
-  elapsedSeconds: 0,
-  timerInterval: null,
-  videoStream: null
-};
-
-/* Audio System (Web Audio API) */
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function ensureAudio() {
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-}
-
-function playSound(type) {
-  try {
-    ensureAudio();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    if (type === 'correct') {
-      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.2);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.25);
-    } else if (type === 'wrong') {
-      osc.frequency.setValueAtTime(220, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.3);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.3);
+<!doctype html>
+<html lang="th"><head><script>window["__codeletBootstrap__"]=JSON.parse('{"A":"A","B":"20260904-05-c4a2e96","C":{"Abril Fatface":"YACgEZbkUVE,0","Alfa Slab One":"YACgEYS9sJU,0","Anton":"YACgEcYqQ-A,0","Archivo":"YAHO2-t-jNE,0","Arial":"YAGyDvJ_4Ts,0","Bebas Neue":"YACgESME5ew,0","Bricolage Grotesque":"YAFyMcdwzpc,0","Canva Sans":"YAFLd8sKbwc,2","Caveat":"YALBs2ploWQ,0","Comic Sans MS":"YAHO2VMiyZo,0","Cormorant Garamond":"YAFdJhX-538,0","Courier New":"YAGzXiGs0_8,0","DM Sans":"YAD1aU3sLnI,0","DM Serif Display":"YAD1aYG82rc,0","Forum":"YACgEcnnqB4,0","Fraunces":"YAEul-FRQw4,0","Georgia":"YAGzXkO0pEM,0","Helvetica Neue":"YAFcf6CtJfI,0","Impact":"YAFcfnjI7Vk,0","Inter":"YAFdJvSyp_k,3","Iowan Old Style":"YAGNIFa8j9o,0","Jacques Francois":"YAHO2a5g66Q,0","JetBrains Mono":"YAFdJksXcAk,0","Libre Baskerville":"YACgEUFdPdA,0","Manrope":"YAHO2b2feC4,0","Merriweather":"YACgEXvHxxs,0","Montserrat":"YADLjI9qxTA,0","Nunito":"YACgEX8C5Gg,0","Oleo Script":"YACgEQQ14jI,0","Phantom Sans":"YAHO2E8Pb88,0","Playfair Display":"YACgEYmuCJE,0","Poppins":"YAFdJjbTu24,1","Press Start 2P":"YAFyGr-8pmQ,0","Quicksand":"YADWjpfPmdk,0","Raleway":"YACgEVg3xZg,0","Segoe UI":"YAHNdRD1Klw,0","Source Sans 3":"YAG4lO1Mj10,0","Spectral":"YAHO2rVUHIM,0","Times New Roman":"YAGzXW3gftg,0","Times":"YAGzXW3gftg,0","Ubuntu":"YACgERDU--Q,0","Work Sans":"YAGXhLOKv44,0","Yellowtail":"YACgEYG4kG4,0","ui-monospace":"YADlN8CFZ8Q,0","ui-sans-serif":"YACkoN-xg4g,0"}}');</script><script src="/_sdk/9e99ecf74af2a081.telemetry_sdk.js" integrity="sha512-tZ7fmfTx2KpCLjXQnEuL9azQ4A5+7+xumsx6r/WYVD0zCP/8LP8hDeCypMQesmP+WyAew4g7l5Ah23Bjd6yoVg=="></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ภารกิจพิชิตพีระมิด DIKW</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.577.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #eef7ff;
+      --cyan: #36d9ff;
+      --blue: #2596ff;
+      --green: #44e5a8;
+      --orange: #ffad4f;
+      --purple: #b67cff;
+      --panel: rgba(12, 24, 72, .72);
+      --line: rgba(119, 225, 255, .28);
     }
-  } catch(e) { console.log('Audio error:', e); }
-}
 
-/* Background Particles System */
-const bgCanvas = document.getElementById('bgCanvas');
-const bgCtx = bgCanvas.getContext('2d');
-let bgParticles = [];
-
-function initBgParticles() {
-  bgCanvas.width = window.innerWidth;
-  bgCanvas.height = window.innerHeight;
-  bgParticles = [];
-  for (let i = 0; i < 40; i++) {
-    bgParticles.push({
-      x: Math.random() * bgCanvas.width,
-      y: Math.random() * bgCanvas.height,
-      radius: Math.random() * 2 + 1,
-      vx: (Math.random() - 0.5) * 0.5,
-      vy: (Math.random() - 0.5) * 0.5,
-      alpha: Math.random() * 0.5 + 0.2
-    });
-  }
-}
-
-function renderBg() {
-  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-  bgCtx.fillStyle = '#7dfcff';
-  bgParticles.forEach(p => {
-    p.x += p.vx;
-    p.y += p.vy;
-    if (p.x < 0) p.x = bgCanvas.width;
-    if (p.x > bgCanvas.width) p.x = 0;
-    if (p.y < 0) p.y = bgCanvas.height;
-    if (p.y > bgCanvas.height) p.y = 0;
-
-    bgCtx.globalAlpha = p.alpha;
-    bgCtx.beginPath();
-    bgCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-    bgCtx.fill();
-  });
-  requestAnimationFrame(renderBg);
-}
-
-/* FX Canvas Explosion Effect */
-const fxCanvas = document.getElementById('fxCanvas');
-const fxCtx = fxCanvas.getContext('2d');
-let fxParticles = [];
-
-function createExplosion(x, y, color = '#7dfcff') {
-  for (let i = 0; i < 25; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 5 + 2;
-    fxParticles.push({
-      x, y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: 1,
-      decay: Math.random() * 0.03 + 0.02,
-      color
-    });
-  }
-}
-
-function renderFx() {
-  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
-  fxParticles.forEach((p, idx) => {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life -= p.decay;
-    if (p.life <= 0) {
-      fxParticles.splice(idx, 1);
-      return;
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      width: 100%;
+      min-height: calc(100 * min(var(--vh, 1vh), 1vh));
+      color: var(--ink);
+      font-family: "Work Sans", sans-serif;
+      overflow-x: hidden;
+      background: #071031;
     }
-    fxCtx.globalAlpha = p.life;
-    fxCtx.fillStyle = p.color;
-    fxCtx.beginPath();
-    fxCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-    fxCtx.fill();
-  });
-  requestAnimationFrame(renderFx);
-}
 
-/* Navigation Screen Functions */
-function showScreen(screenId) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const target = document.getElementById(screenId);
-  if (target) target.classList.add('active');
-  state.screen = screenId;
-}
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible {
+      outline: 3px solid #f8e960;
+      outline-offset: 3px;
+    }
 
-function openModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) modal.classList.add('active');
-}
+    .app-shell {
+      position: relative;
+      width: 100%;
+      min-height: calc(100 * min(var(--vh, 1vh), 1vh));
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(48, 174, 255, .22), transparent 24%),
+        radial-gradient(circle at 88% 12%, rgba(163, 81, 255, .23), transparent 28%),
+        linear-gradient(135deg, #060b29 0%, #0b1550 48%, #17103d 100%);
+    }
 
-function closeModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) modal.classList.remove('active');
-}
+    .app-shell::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .32;
+      background-image:
+        linear-gradient(90deg, transparent 49%, rgba(92, 219, 255, .2) 50%, transparent 51%),
+        linear-gradient(0deg, transparent 49%, rgba(92, 219, 255, .16) 50%, transparent 51%);
+      background-size: 68px 68px;
+      mask-image: radial-gradient(circle at center, black, transparent 75%);
+    }
 
-/* AR Camera Handler */
-async function initAR() {
-  try {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-      state.videoStream = stream;
-      const videoCanvas = document.getElementById('arVideoCanvas');
-      const videoEl = document.createElement('video');
-      videoEl.srcObject = stream;
-      videoEl.autoplay = true;
-      videoEl.play();
-      
-      const drawVideo = () => {
-        if (state.controlMode === 'ar' && state.videoStream) {
-          const ctx = videoCanvas.getContext('2d');
-          videoCanvas.width = window.innerWidth;
-          videoCanvas.height = window.innerHeight;
-          ctx.drawImage(videoEl, 0, 0, videoCanvas.width, videoCanvas.height);
-          requestAnimationFrame(drawVideo);
+    .particle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: #78edff;
+      border-radius: 50%;
+      box-shadow: 0 0 14px #55dfff;
+      opacity: .55;
+      animation: float 9s ease-in-out infinite;
+    }
+
+    .particle:nth-child(2) { top: 18%; left: 9%; animation-delay: -2s; }
+    .particle:nth-child(3) { top: 68%; left: 14%; animation-delay: -5s; }
+    .particle:nth-child(4) { top: 28%; right: 10%; animation-delay: -1s; }
+    .particle:nth-child(5) { bottom: 12%; right: 18%; animation-delay: -4s; }
+    .particle:nth-child(6) { top: 52%; right: 6%; animation-delay: -7s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(0, -20px); }
+    }
+
+    .view {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: calc(100 * min(var(--vh, 1vh), 1vh));
+      padding: 24px;
+    }
+
+    .glass {
+      background: rgba(12, 28, 78, .63);
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, .27), inset 0 1px 0 rgba(255,255,255,.08);
+      backdrop-filter: blur(16px);
+    }
+
+    .robot {
+      width: 148px;
+      filter: drop-shadow(0 0 22px rgba(77, 216, 255, .48));
+      animation: bob 3.2s ease-in-out infinite;
+    }
+
+    @keyframes bob {
+      0%,100% { transform: translateY(0) rotate(-1deg); }
+      50% { transform: translateY(-10px) rotate(1deg); }
+    }
+
+    .robot .happy-eye { display: none; }
+    .robot.happy .normal-eye, .robot.cheer .normal-eye { display: none; }
+    .robot.happy .happy-eye { display: block; }
+    .robot.cheer .eye-left, .robot.cheer .eye-right { transform: translateY(4px); }
+
+    .neo-button {
+      border: 1px solid rgba(101, 222, 255, .55);
+      border-radius: 15px;
+      padding: 12px 18px;
+      color: white;
+      background: linear-gradient(135deg, #1688ed, #6058d9);
+      box-shadow: 0 8px 24px rgba(42, 145, 255, .25);
+      transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+    }
+
+    .neo-button:hover { transform: translateY(-2px); filter: brightness(1.12); box-shadow: 0 12px 28px rgba(53, 190, 255, .33); }
+    .neo-button.secondary { background: rgba(24, 52, 115, .58); }
+    .neo-button.warn { background: linear-gradient(135deg, #7e4de8, #b55fe0); }
+    .neo-button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
+
+    .tag {
+      font-family: "Space Mono", monospace;
+      letter-spacing: .08em;
+      font-size: .72rem;
+      color: #89e9ff;
+    }
+
+    .start-grid {
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      min-height: calc(100 * min(var(--vh, 1vh), 1vh) - 48px);
+      display: grid;
+      align-content: center;
+      grid-template-columns: .78fr 1.22fr;
+      gap: 26px;
+    }
+
+    .start-visual {
+      min-height: 480px;
+      border-radius: 30px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .start-visual::after {
+      content: "DATA → INFORMATION → KNOWLEDGE → WISDOM";
+      position: absolute;
+      bottom: 22px;
+      font-family: "Space Mono", monospace;
+      font-size: .68rem;
+      color: #82e8ff;
+      letter-spacing: .09em;
+    }
+
+    .start-content { border-radius: 30px; padding: clamp(24px, 5vw, 48px); }
+
+    .objective-item {
+      border-left: 2px solid #42dcff;
+      padding-left: 12px;
+      color: #d7e6ff;
+      font-size: .92rem;
+    }
+
+    .game-layout { width: min(1260px, 100%); margin: 0 auto; }
+    .hud {
+      display: grid;
+      grid-template-columns: 1.4fr repeat(5, minmax(72px, 1fr)) auto;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 19px;
+      align-items: stretch;
+    }
+
+    .hud-stat {
+      padding: 8px 11px;
+      border-radius: 12px;
+      background: rgba(5, 16, 52, .52);
+      border: 1px solid rgba(110, 219, 255, .17);
+      min-width: 0;
+    }
+
+    .hud-stat b { display:block; color:#8ceeff; font-size:.7rem; font-weight:500; }
+    .hud-stat span { display:block; margin-top:2px; font-family:"Space Mono", monospace; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .hud-actions { display:flex; gap:7px; align-items:center; }
+    .icon-btn { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; color:#dcf8ff; background:rgba(15,41,98,.72); border:1px solid rgba(111,226,255,.3); }
+    .icon-btn:hover { background:#1d5cb2; }
+
+    .mission-panel {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 15px;
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 18px;
+    }
+
+    .mission-panel .robot { width:74px; }
+    .stage-chip { color:#84efff; font-weight:700; }
+
+    .play-grid {
+      display:grid;
+      grid-template-columns: minmax(300px, .9fr) minmax(340px, 1.1fr);
+      gap: 22px;
+      align-items:center;
+      margin-top: 18px;
+    }
+
+    .card-zone {
+      min-height: 320px;
+      padding: 24px;
+      border-radius: 26px;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .card-zone::before {
+      content:"CARD SIGNAL";
+      position:absolute;
+      top:14px;
+      left:19px;
+      font-family:"Space Mono", monospace;
+      color:#72eaff;
+      font-size:.65rem;
+      letter-spacing:.12em;
+    }
+
+    .scenario-card {
+      width: min(100%, 390px);
+      min-height: 210px;
+      touch-action: none;
+      user-select: none;
+      padding: 25px;
+      border: 1px solid rgba(113,235,255,.7);
+      border-radius: 22px;
+      color: #f5fdff;
+      background: linear-gradient(135deg, rgba(20, 93, 158, .9), rgba(46, 31, 115, .9));
+      box-shadow: 0 0 0 1px rgba(126, 233,255,.15), 0 18px 38px rgba(0,0,0,.34), inset 0 1px 1px rgba(255,255,255,.18);
+      transition: transform .2s ease, opacity .2s ease;
+      position: relative;
+    }
+
+    .scenario-card::after {
+      content:"↗ DRAG / TAP";
+      position:absolute;
+      bottom:15px;
+      right:17px;
+      font-family:"Space Mono", monospace;
+      font-size:.62rem;
+      color:#8defff;
+    }
+
+    .scenario-card.selected {
+      outline: 3px solid #f7ed69;
+      transform: translateY(-6px);
+      box-shadow: 0 0 30px rgba(247,237,105,.45);
+    }
+
+    .scenario-card.dragging { opacity:.48; transform:scale(.96); }
+    .scenario-card .card-index { color:#75eaff; font-family:"Space Mono",monospace; font-size:.75rem; }
+    .scenario-card p { margin:17px 0 24px; font-size:clamp(1rem, 2.1vw, 1.22rem); line-height:1.65; font-weight:600; }
+
+    .pyramid { display:flex; flex-direction:column-reverse; align-items:center; gap:9px; padding:12px 0; }
+    .level {
+      min-height: 66px;
+      width: 100%;
+      display:grid;
+      grid-template-columns: 50px 1fr auto;
+      align-items:center;
+      gap:12px;
+      border:1px solid currentColor;
+      border-radius:13px;
+      padding:9px 18px;
+      transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+      position:relative;
+    }
+
+    .level:hover, .level.targeted { transform:scale(1.025); filter:brightness(1.16); box-shadow:0 0 28px currentColor; }
+    .level:focus-visible { outline:3px solid #fff05b; outline-offset:4px; }
+    .level small { opacity:.86; line-height:1.25; }
+    .level .level-key { font-family:"Space Mono",monospace; font-weight:bold; font-size:.8rem; }
+    .level.data { width:67%; color:#63d8ff; background:rgba(17,141,228,.25); }
+    .level.information { width:76%; color:#68efaf; background:rgba(34,164,112,.25); }
+    .level.knowledge { width:87%; color:#ffc05d; background:rgba(199,105,26,.25); }
+    .level.wisdom { width:100%; color:#cd9cff; background:rgba(133,70,194,.28); }
+
+    .feedback {
+      margin-top:16px;
+      min-height:72px;
+      padding:15px 18px;
+      border-radius:17px;
+      color:#ddf7ff;
+      border:1px solid rgba(117,224,255,.28);
+    }
+
+    .feedback.success { border-color:#5ef4b1; background:rgba(26,143,95,.22); }
+    .feedback.error { border-color:#ffb368; background:rgba(161,77,26,.25); }
+    .feedback h3 { margin:0 0 4px; color:#fff; font-size:1rem; }
+    .feedback p { margin:0; color:#d6eaff; font-size:.92rem; }
+
+    .modal-backdrop {
+      position:fixed;
+      z-index:20;
+      inset:0;
+      display:grid;
+      place-items:center;
+      padding:20px;
+      background:rgba(1,6,27,.76);
+      backdrop-filter: blur(8px);
+    }
+
+    .modal {
+      width:min(680px, 100%);
+      max-height:calc(100 * min(var(--vh, 1vh), 1vh) - 40px);
+      overflow:auto;
+      border-radius:25px;
+      padding:clamp(22px, 4vw, 34px);
+    }
+
+    .guide-table { width:100%; border-collapse:collapse; margin-top:18px; overflow:hidden; border-radius:13px; }
+    .guide-table th, .guide-table td { text-align:left; padding:12px; border-bottom:1px solid rgba(126,223,255,.17); font-size:.9rem; }
+    .guide-table th { color:#8eebff; font-family:"Space Mono",monospace; font-size:.72rem; }
+
+    .result-card { width:min(790px,100%); margin:0 auto; border-radius:29px; padding:clamp(25px,5vw,48px); text-align:center; }
+    .result-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:23px 0; text-align:left; }
+    .result-stat { padding:13px; border:1px solid rgba(112,222,255,.22); border-radius:14px; background:rgba(6,24,68,.44); }
+    .result-stat b { display:block; color:#8cecff; font-family:"Space Mono",monospace; font-size:.75rem; }
+    .result-stat span { display:block; font-size:1.2rem; margin-top:3px; font-weight:700; }
+
+    .hidden { display:none !important; }
+
+    @media (max-width: 850px) {
+      .start-grid, .play-grid { grid-template-columns:1fr; }
+      .start-visual { min-height:240px; }
+      .hud { grid-template-columns:repeat(3,1fr); }
+      .hud-stat:first-child { grid-column:span 2; }
+      .hud-actions { justify-content:end; }
+      .level { width:100% !important; }
+    }
+
+    @media (max-width: 520px) {
+      .view { padding:13px; }
+      .hud { gap:6px; padding:8px; }
+      .hud-stat { padding:7px; }
+      .hud-stat span { font-size:.73rem; }
+      .mission-panel { grid-template-columns:1fr; text-align:center; }
+      .mission-panel .robot { margin:auto; }
+      .card-zone { min-height:270px; padding:15px; }
+      .scenario-card { min-height:190px; padding:20px; }
+      .level { grid-template-columns:38px 1fr; padding:8px 10px; }
+      .level small { display:none; }
+      .result-grid { grid-template-columns:repeat(2,1fr); }
+    }
+  </style>
+  <script src="/_sdk/fbe2ebfd64647c54.data_sdk.js" type="text/javascript" integrity="sha512-vkTX6CfvpHc3WbjK+tFJCaDuw4ERA4aEV/e5/7+MMJPMTF4RJYCI6CAwJBT/gtDW+dba4uLSsPUgDjVDHWtgUQ=="></script>
+  <script src="/_sdk/fcb6dc01f91829ac.resizing_sdk.js" type="text/javascript" integrity="sha512-YK8JfnN705qaEaVhiL7pcVB2Rs/BbdX5yxV55Az8zT/1JanyEWTw9HqCF915m9iV1YEaoil8qsjJz03l1Kb0Ug=="></script>
+ </head>
+ <body data-template-id="__page-root" style="background: linear-gradient(135deg, rgb(6, 11, 41), rgb(23, 16, 61));">
+  <div class="app-shell">
+   <span class="particle"></span><span class="particle"></span><span class="particle"></span> <span class="particle"></span><span class="particle"></span><span class="particle"></span>
+   <main>
+    <section id="start-view" class="view">
+     <div class="start-grid">
+      <aside class="start-visual glass" aria-label="ตัวละครเดต้า">
+       <svg id="robot-start" class="robot" viewBox="0 0 180 220" role="img" aria-label="เดต้าหุ่นยนต์ผู้ช่วยอัจฉริยะ">
+        <defs>
+         <linearGradient id="bodyGrad" x1="0" x2="1">
+          <stop stop-color="#28c9ff"></stop>
+          <stop offset="1" stop-color="#8055e5"></stop>
+         </linearGradient>
+         <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="b"></feGaussianBlur>
+          <feMerge>
+           <feMergeNode in="b"></feMergeNode>
+           <feMergeNode in="SourceGraphic"></feMergeNode>
+          </feMerge>
+         </filter>
+        </defs> <path d="M90 18V5M78 6h24" stroke="#8bebff" stroke-width="5" stroke-linecap="round"></path> <circle cx="90" cy="18" r="7" fill="#ffe96b" filter="url(#glow)"></circle> <rect x="29" y="31" width="122" height="91" rx="34" fill="#102d75" stroke="#68e8ff" stroke-width="4"></rect> <rect x="39" y="42" width="102" height="68" rx="25" fill="#0a174a" stroke="#5572ed" stroke-width="2"></rect> <g class="normal-eye">
+         <ellipse class="eye-left" cx="67" cy="74" rx="11" ry="15" fill="#68ecff" filter="url(#glow)"></ellipse>
+         <ellipse class="eye-right" cx="113" cy="74" rx="11" ry="15" fill="#68ecff" filter="url(#glow)"></ellipse>
+        </g> <g class="happy-eye" stroke="#68ecff" stroke-width="5" fill="none" stroke-linecap="round">
+         <path d="M55 77q12 14 24 0"></path>
+         <path d="M101 77q12 14 24 0"></path>
+        </g> <path d="M76 96q14 10 28 0" fill="none" stroke="#d4fbff" stroke-width="3" stroke-linecap="round"></path> <path d="M54 125h72l13 65q-49 23-98 0z" fill="url(#bodyGrad)" stroke="#75eaff" stroke-width="3"></path> <rect x="70" y="145" width="40" height="26" rx="7" fill="#102b72" stroke="#87efff" stroke-width="2"></rect> <path d="M77 158h26M90 150v16" stroke="#79edff" stroke-width="2"></path> <path d="M54 137L28 158M126 137l26 21" stroke="#63dfff" stroke-width="11" stroke-linecap="round"></path> <circle cx="25" cy="160" r="11" fill="#805de3" stroke="#81eaff" stroke-width="3"></circle> <circle cx="155" cy="160" r="11" fill="#805de3" stroke="#81eaff" stroke-width="3"></circle> <path d="M68 193l-9 19M112 193l9 19" stroke="#65dfff" stroke-width="12" stroke-linecap="round"></path>
+       </svg>
+      </aside>
+      <div class="start-content glass">
+       <p data-template-id="start-kicker" class="canva-text tag" style="color: rgb(137, 233, 255); font-weight: 700; font-style: normal; font-size: 12px;">COMPUTATIONAL SCIENCE • M.5</p>
+       <h1 data-template-id="game-title" class="canva-text mt-3 text-4xl md:text-5xl font-extrabold leading-tight" style="color: rgb(255, 255, 255); font-weight: 800; font-style: normal; font-size: 32px;">ภารกิจพิชิตพีระมิด DIKW</h1>
+       <p data-template-id="game-subtitle" class="canva-text mt-4 max-w-xl text-blue-100 leading-7" style="color: rgb(213, 233, 255); font-weight: 400; font-style: normal; font-size: 17px; line-height: 1.6;">DATA’s DIKW Sorting Quest — เปลี่ยนข้อมูลดิบให้กลายเป็นปัญญา ผ่านการคัดแยกการ์ดสถานการณ์ในห้องปฏิบัติการข้อมูลแห่งอนาคต</p>
+       <div class="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-950/20 p-4">
+        <p data-template-id="data-welcome" class="canva-text leading-7 text-cyan-50" style="color: rgb(239, 253, 255); font-weight: 500; font-style: normal; font-size: 16px; line-height: 1.6;">สวัสดี! ฉันชื่อเดต้า วันนี้เราจะช่วยกันเปลี่ยนข้อมูลดิบให้กลายเป็นปัญญา พร้อมแล้วไปพิชิตพีระมิด DIKW กันเลย!</p>
+       </div>
+       <h2 data-template-id="objective-title" class="canva-text mt-7 text-lg font-bold" style="color: rgb(255, 255, 255); font-weight: 700; font-style: normal; font-size: 19px;">เมื่อจบภารกิจ คุณจะสามารถ</h2>
+       <div class="mt-3 grid gap-3">
+        <p data-template-id="objective-one" class="canva-text objective-item" style="color: rgb(215, 230, 255); font-weight: 400; font-style: normal; font-size: 14px;">อธิบายความหมายของ Data, Information, Knowledge และ Wisdom ได้</p>
+        <p data-template-id="objective-two" class="canva-text objective-item" style="color: rgb(215, 230, 255); font-weight: 400; font-style: normal; font-size: 14px;">จำแนกตัวอย่างตามลำดับชั้น DIKW ได้อย่างถูกต้อง</p>
+        <p data-template-id="objective-three" class="canva-text objective-item" style="color: rgb(215, 230, 255); font-weight: 400; font-style: normal; font-size: 14px;">เลือกใช้ความรู้ประกอบการตัดสินใจอย่างเหมาะสม</p>
+       </div>
+       <form id="start-form" class="mt-7">
+        <label data-template-id="name-label" class="canva-text mb-2 block font-semibold" for="player-name" style="color: rgb(255, 255, 255); font-weight: 600; font-style: normal; font-size: 15px;">ระบุชื่อของนักสำรวจข้อมูล</label> <input id="player-name" data-template-id="name-input" class="canva-input w-full rounded-xl border border-cyan-300/30 bg-slate-950/45 px-4 py-3 text-white placeholder:text-blue-200 focus:border-cyan-300" type="text" maxlength="24" placeholder="พิมพ์ชื่อเล่นของคุณ" style="background: rgba(2, 15, 48, 0.45); color: rgb(220, 239, 255); font-weight: 400; font-style: normal; font-size: 16px;">
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+         <button data-template-id="ar-button" class="canva-button neo-button" type="button" id="ar-start" style="background: linear-gradient(135deg, rgb(22, 136, 237), rgb(96, 88, 217)); color: rgb(255, 255, 255); font-weight: 700;"><i data-lucide="scan-line" class="inline w-4 h-4 mr-1"></i><span data-template-id="ar-button-label" class="canva-text" style="color: rgb(255, 255, 255); font-weight: 700; font-style: normal; font-size: 16px;">เล่นด้วย AR</span></button> <button data-template-id="mouse-button" class="canva-button neo-button secondary" type="submit" style="background: rgba(24, 52, 115, 0.58); color: rgb(255, 255, 255); font-weight: 700;"><i data-lucide="mouse-pointer-2" class="inline w-4 h-4 mr-1"></i><span data-template-id="mouse-button-label" class="canva-text" style="color: rgb(255, 255, 255); font-weight: 700; font-style: normal; font-size: 16px;">เล่นด้วยเมาส์/สัมผัส</span></button> <button data-template-id="how-button" class="canva-button neo-button secondary" type="button" id="how-open" style="background: rgba(24, 52, 115, 0.58); color: rgb(255, 255, 255); font-weight: 600;"><i data-lucide="circle-help" class="inline w-4 h-4 mr-1"></i><span data-template-id="how-button-label" class="canva-text" style="color: rgb(255, 255, 255); font-weight: 600; font-style: normal; font-size: 16px;">วิธีเล่น</span></button> <button data-template-id="guide-button-start" class="canva-button neo-button secondary" type="button" id="guide-open-start" style="background: rgba(24, 52, 115, 0.58); color: rgb(255, 255, 255); font-weight: 600;"><i data-lucide="book-open" class="inline w-4 h-4 mr-1"></i><span data-template-id="guide-button-start-label" class="canva-text" style="color: rgb(255, 255, 255); font-weight: 600; font-style: normal; font-size: 16px;">เปิดคู่มือ DIKW</span></button>
+        </div>
+       </form><button id="sound-start" data-template-id="sound-button-start" class="canva-button mt-5 text-sm text-cyan-200 underline decoration-cyan-500 underline-offset-4" type="button" style="color: rgb(158, 238, 255); font-weight: 500; font-style: normal; font-size: 14px;">🔊 เสียง: เปิด</button>
+      </div>
+     </div>
+    </section>
+    <section id="game-view" class="view hidden" aria-live="polite">
+     <div class="game-layout">
+      <header class="hud glass">
+       <div class="hud-stat"><b data-template-id="hud-player-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">ผู้เล่น</b><span id="hud-player">—</span>
+       </div>
+       <div class="hud-stat"><b data-template-id="hud-score-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">คะแนน</b><span id="hud-score">0</span>
+       </div>
+       <div class="hud-stat"><b data-template-id="hud-energy-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">พลังงาน</b><span id="hud-energy">⚡⚡⚡⚡⚡</span>
+       </div>
+       <div class="hud-stat"><b data-template-id="hud-stage-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">ด่าน</b><span id="hud-stage">1 / 4</span>
+       </div>
+       <div class="hud-stat"><b data-template-id="hud-question-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">ข้อ</b><span id="hud-question">1 / 20</span>
+       </div>
+       <div class="hud-stat"><b data-template-id="hud-combo-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">COMBO</b><span id="hud-combo">x0</span>
+       </div>
+       <div class="hud-stat"><b data-template-id="hud-time-label" class="canva-text" style="color: rgb(140, 238, 255); font-weight: 600; font-style: normal; font-size: 11px;">เวลา</b><span id="hud-time">—</span>
+       </div>
+       <div class="hud-actions">
+        <button id="hint-button" data-template-id="hint-button" class="canva-button icon-btn" type="button" aria-label="คำใบ้" style="background: rgba(15, 41, 98, 0.72); color: rgb(220, 248, 255);"><i data-lucide="lightbulb"></i></button> <button id="guide-open-game" data-template-id="guide-button-game" class="canva-button icon-btn" type="button" aria-label="เปิดคู่มือ" style="background: rgba(15, 41, 98, 0.72); color: rgb(220, 248, 255);"><i data-lucide="book-open"></i></button> <button id="pause-button" data-template-id="pause-button" class="canva-button icon-btn" type="button" aria-label="หยุดเกม" style="background: rgba(15, 41, 98, 0.72); color: rgb(220, 248, 255);"><i data-lucide="pause"></i></button> <button id="sound-game" data-template-id="sound-button-game" class="canva-button icon-btn" type="button" aria-label="เปิดหรือปิดเสียง" style="background: rgba(15, 41, 98, 0.72); color: rgb(220, 248, 255);"><i data-lucide="volume-2"></i></button>
+       </div>
+      </header>
+      <section class="mission-panel glass">
+       <svg id="robot-game" class="robot" viewBox="0 0 180 220" aria-hidden="true">
+        <defs>
+         <linearGradient id="bodyGrad2" x1="0" x2="1">
+          <stop stop-color="#28c9ff"></stop>
+          <stop offset="1" stop-color="#8055e5"></stop>
+         </linearGradient>
+        </defs> <path d="M90 18V5M78 6h24" stroke="#8bebff" stroke-width="5" stroke-linecap="round"></path><circle cx="90" cy="18" r="7" fill="#ffe96b"></circle> <rect x="29" y="31" width="122" height="91" rx="34" fill="#102d75" stroke="#68e8ff" stroke-width="4"></rect><rect x="39" y="42" width="102" height="68" rx="25" fill="#0a174a"></rect> <g class="normal-eye">
+         <ellipse class="eye-left" cx="67" cy="74" rx="11" ry="15" fill="#68ecff"></ellipse>
+         <ellipse class="eye-right" cx="113" cy="74" rx="11" ry="15" fill="#68ecff"></ellipse>
+        </g> <g class="happy-eye" stroke="#68ecff" stroke-width="5" fill="none" stroke-linecap="round">
+         <path d="M55 77q12 14 24 0"></path>
+         <path d="M101 77q12 14 24 0"></path>
+        </g> <path d="M76 96q14 10 28 0" fill="none" stroke="#d4fbff" stroke-width="3"></path> <path d="M54 125h72l13 65q-49 23-98 0z" fill="url(#bodyGrad2)" stroke="#75eaff" stroke-width="3"></path><rect x="70" y="145" width="40" height="26" rx="7" fill="#102b72" stroke="#87efff" stroke-width="2"></rect> <path d="M77 158h26M90 150v16" stroke="#79edff" stroke-width="2"></path><path d="M54 137L28 158M126 137l26 21" stroke="#63dfff" stroke-width="11" stroke-linecap="round"></path> <circle cx="25" cy="160" r="11" fill="#805de3" stroke="#81eaff" stroke-width="3"></circle><circle cx="155" cy="160" r="11" fill="#805de3" stroke="#81eaff" stroke-width="3"></circle>
+       </svg>
+       <div>
+        <div id="stage-name" class="stage-chip">
+         ด่านที่ 1
+        </div>
+        <p id="stage-message" class="mt-1 mb-0 text-blue-50">เดต้ากำลังเตรียมภารกิจ...</p>
+       </div>
+      </section>
+      <div class="play-grid">
+       <section class="card-zone glass" aria-label="พื้นที่การ์ดสถานการณ์">
+        <article id="scenario-card" class="scenario-card" tabindex="0" role="button" aria-label="การ์ดสถานการณ์ เลือกเพื่อลากหรือแตะหมวดหมู่">
+         <span id="card-index" class="card-index"></span>
+         <p id="card-text"></p>
+        </article>
+       </section>
+       <section class="pyramid" aria-label="พีระมิด DIKW เลือกหมวดหมู่ที่ถูกต้อง">
+        <button data-category="data" class="level data" type="button"><span class="level-key">01</span><span data-template-id="level-data-name" class="canva-text font-bold" style="color: rgb(99, 216, 255); font-weight: 700; font-style: normal; font-size: 17px;">Data — ข้อมูล</span><small data-template-id="level-data-description" class="canva-text" style="color: rgb(200, 243, 255); font-weight: 400; font-style: normal; font-size: 12px;">ข้อเท็จจริงดิบ</small></button> <button data-category="information" class="level information" type="button"><span class="level-key">02</span><span data-template-id="level-information-name" class="canva-text font-bold" style="color: rgb(104, 239, 175); font-weight: 700; font-style: normal; font-size: 17px;">Information — สารสนเทศ</span><small data-template-id="level-information-description" class="canva-text" style="color: rgb(216, 255, 234); font-weight: 400; font-style: normal; font-size: 12px;">ข้อมูลที่มีความหมาย</small></button> <button data-category="knowledge" class="level knowledge" type="button"><span class="level-key">03</span><span data-template-id="level-knowledge-name" class="canva-text font-bold" style="color: rgb(255, 192, 93); font-weight: 700; font-style: normal; font-size: 17px;">Knowledge — ความรู้</span><small data-template-id="level-knowledge-description" class="canva-text" style="color: rgb(255, 240, 208); font-weight: 400; font-style: normal; font-size: 12px;">ความเข้าใจและความสัมพันธ์</small></button> <button data-category="wisdom" class="level wisdom" type="button"><span class="level-key">04</span><span data-template-id="level-wisdom-name" class="canva-text font-bold" style="color: rgb(205, 156, 255); font-weight: 700; font-style: normal; font-size: 17px;">Wisdom — ปัญญา</span><small data-template-id="level-wisdom-description" class="canva-text" style="color: rgb(240, 221, 255); font-weight: 400; font-style: normal; font-size: 12px;">การตัดสินใจที่เหมาะสม</small></button>
+       </section>
+      </div>
+      <section id="feedback-box" class="feedback glass" aria-live="assertive">
+       <h3 id="feedback-title">DATA พร้อมแล้ว!</h3>
+       <p id="feedback-text">ลากการ์ดไปวางบนพีระมิด หรือแตะการ์ดแล้วเลือกหมวดหมู่</p>
+      </section>
+     </div>
+    </section>
+    <section id="result-view" class="view hidden">
+     <div class="result-card glass">
+      <svg id="robot-result" class="robot mx-auto" viewBox="0 0 180 220" aria-hidden="true">
+       <path d="M90 18V5M78 6h24" stroke="#8bebff" stroke-width="5" stroke-linecap="round"></path><circle cx="90" cy="18" r="7" fill="#ffe96b"></circle> <rect x="29" y="31" width="122" height="91" rx="34" fill="#102d75" stroke="#68e8ff" stroke-width="4"></rect><rect x="39" y="42" width="102" height="68" rx="25" fill="#0a174a"></rect> <g class="normal-eye">
+        <ellipse class="eye-left" cx="67" cy="74" rx="11" ry="15" fill="#68ecff"></ellipse>
+        <ellipse class="eye-right" cx="113" cy="74" rx="11" ry="15" fill="#68ecff"></ellipse>
+       </g> <g class="happy-eye" stroke="#68ecff" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M55 77q12 14 24 0"></path>
+        <path d="M101 77q12 14 24 0"></path>
+       </g> <path d="M76 96q14 10 28 0" fill="none" stroke="#d4fbff" stroke-width="3"></path> <path d="M54 125h72l13 65q-49 23-98 0z" fill="#396ce0" stroke="#75eaff" stroke-width="3"></path><rect x="70" y="145" width="40" height="26" rx="7" fill="#102b72" stroke="#87efff" stroke-width="2"></rect> <path d="M77 158h26M90 150v16" stroke="#79edff" stroke-width="2"></path>
+      </svg>
+      <p data-template-id="result-kicker" class="canva-text tag mt-2" style="color: rgb(137, 233, 255); font-weight: 700; font-style: normal; font-size: 12px;">MISSION REPORT</p>
+      <h1 data-template-id="result-title" class="canva-text mt-3 text-3xl font-extrabold" style="color: rgb(255, 255, 255); font-weight: 800; font-style: normal; font-size: 32px;">สรุปภารกิจ DIKW</h1>
+      <p id="result-summary" class="mt-3 text-blue-100"></p>
+      <div class="result-grid">
+       <div class="result-stat"><b data-template-id="result-score-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">คะแนนรวม</b><span id="result-score">0</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-high-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">คะแนนสูงสุด</b><span id="result-high">0</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-accuracy-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">ความแม่นยำ</b><span id="result-accuracy">0%</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-first-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">ถูกครั้งแรก</b><span id="result-first">0</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-retry-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">ตอบใหม่</b><span id="result-retry">0</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-combo-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">Combo สูงสุด</b><span id="result-combo">0</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-hint-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">คำใบ้ที่ใช้</b><span id="result-hints">0</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-time-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">เวลาที่ใช้</b><span id="result-time">0:00</span>
+       </div>
+       <div class="result-stat"><b data-template-id="result-level-label" class="canva-text" style="color: rgb(140, 236, 255); font-weight: 600; font-style: normal; font-size: 12px;">ระดับผลการเรียนรู้</b><span id="result-level">—</span>
+       </div>
+      </div>
+      <div class="rounded-2xl border border-cyan-300/20 bg-cyan-950/20 p-4 text-left">
+       <b data-template-id="result-advice-label" class="canva-text text-cyan-200" style="color: rgb(158, 238, 255); font-weight: 700; font-style: normal; font-size: 15px;">คำแนะนำจากเดต้า</b>
+       <p id="result-advice" class="mt-2 mb-0 leading-7 text-blue-50"></p>
+      </div>
+      <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+       <button id="play-again" data-template-id="play-again-button" class="canva-button neo-button" type="button" style="background: linear-gradient(135deg, rgb(22, 136, 237), rgb(96, 88, 217)); color: rgb(255, 255, 255); font-weight: 700; font-style: normal; font-size: 16px;">เล่นอีกครั้ง</button> <button id="review-button" data-template-id="review-button" class="canva-button neo-button secondary" type="button" style="background: rgba(24, 52, 115, 0.58); color: rgb(255, 255, 255); font-weight: 600; font-style: normal; font-size: 15px;">ทบทวนข้อที่ตอบผิด</button> <button id="home-button" data-template-id="home-button" class="canva-button neo-button secondary" type="button" style="background: rgba(24, 52, 115, 0.58); color: rgb(255, 255, 255); font-weight: 600; font-style: normal; font-size: 15px;">กลับหน้าหลัก</button>
+      </div>
+     </div>
+    </section>
+   </main>
+   <div id="modal-layer" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <section class="modal glass">
+     <div class="flex items-start justify-between gap-4">
+      <div>
+       <p id="modal-kicker" class="tag"></p>
+       <h2 id="modal-title" class="mt-2 text-2xl font-bold"></h2>
+      </div><button id="modal-close" class="icon-btn" type="button" aria-label="ปิดหน้าต่าง"><i data-lucide="x"></i></button>
+     </div>
+     <div id="modal-content" class="mt-4 text-blue-50 leading-7"></div>
+     <div id="modal-actions" class="mt-6 flex flex-wrap gap-3"></div>
+    </section>
+   </div>
+  </div>
+  <script src="/_sdk/5629ea66dc55d54f.editing_sdk.js" integrity="sha512-snPYzGvgiTEMUBOb+HlCBkFeiM0IRX4hcgA78wvalhC0WnJtaX+RCbosPWtNqZsZ7sZ9NwN0oePZYa+IlMwa+w=="></script>
+  <script>
+    /* คลังสถานการณ์ DIKW จำนวน 40 ข้อ แบ่งหมวดละ 10 ข้อ */
+    const cardBank = [
+      {id:1,text:"คะแนนสอบของนักเรียน 5 คน คือ 55, 62, 70, 81 และ 90 คะแนน",category:"data",explanation:"เป็นคะแนนดิบที่รวบรวมมา ยังไม่ได้คำนวณหรือสรุปความหมาย",difficulty:1},
+      {id:2,text:"อุณหภูมิที่วัดได้เวลา 08.00 น. คือ 29 องศาเซลเซียส",category:"data",explanation:"เป็นค่าที่ตรวจวัดได้โดยตรงจากเซนเซอร์",difficulty:1},
+      {id:3,text:"จำนวนก้าวเดินวันนี้ของกานต์คือ 7,842 ก้าว",category:"data",explanation:"เป็นค่าตัวเลขที่อุปกรณ์บันทึกโดยตรง",difficulty:1},
+      {id:4,text:"รถโดยสารสาย 29 มาถึงป้ายเวลา 07.35 น.",category:"data",explanation:"เป็นข้อเท็จจริงจากการสังเกตเพียงหนึ่งค่า",difficulty:1},
+      {id:5,text:"ร้านค้าออนไลน์ได้รับรีวิว 4 ดาวจากผู้ซื้อคนหนึ่ง",category:"data",explanation:"เป็นคะแนนรีวิวดิบจากผู้ใช้รายหนึ่ง",difficulty:1},
+      {id:6,text:"โพสต์เรื่องลดขยะมีผู้กดถูกใจ 326 ครั้ง",category:"data",explanation:"เป็นจำนวนการกดถูกใจที่บันทึกไว้โดยตรง",difficulty:1},
+      {id:7,text:"เซนเซอร์วัดคุณภาพอากาศแสดงค่า PM2.5 เท่ากับ 42 ไมโครกรัมต่อลูกบาศก์เมตร",category:"data",explanation:"เป็นค่าจากเซนเซอร์ที่ยังไม่ตีความผลกระทบ",difficulty:1},
+      {id:8,text:"มิเตอร์ไฟฟ้าบันทึกการใช้ไฟของบ้านเมื่อวาน 18 หน่วย",category:"data",explanation:"เป็นค่าการใช้พลังงานดิบในช่วงเวลาหนึ่ง",difficulty:1},
+      {id:9,text:"ระบบบันทึกว่าผู้ใช้เปิดแอปพลิเคชันเวลา 21.14 น.",category:"data",explanation:"เป็นบันทึกเหตุการณ์ดิบจากระบบ",difficulty:1},
+      {id:10,text:"น้ำหนักที่ชั่งได้ก่อนออกกำลังกายคือ 58.4 กิโลกรัม",category:"data",explanation:"เป็นค่าที่วัดได้โดยตรงและยังไม่ผ่านการวิเคราะห์",difficulty:1},
+
+      {id:11,text:"คะแนนเฉลี่ยของนักเรียนกลุ่มนี้เท่ากับ 71.6 คะแนน",category:"information",explanation:"คะแนนดิบถูกนำมาคำนวณค่าเฉลี่ย จึงมีความหมายมากขึ้น",difficulty:2},
+      {id:12,text:"พยากรณ์อากาศวันนี้ระบุว่าช่วงบ่ายมีโอกาสฝนตก 80 เปอร์เซ็นต์",category:"information",explanation:"ข้อมูลตรวจวัดหลายส่วนถูกประมวลผลและสรุปเป็นการพยากรณ์",difficulty:2},
+      {id:13,text:"แอปสุขภาพสรุปว่าในสัปดาห์นี้เดินเฉลี่ยวันละ 8,100 ก้าว",category:"information",explanation:"ข้อมูลจำนวนก้าวหลายวันถูกคำนวณเป็นค่าเฉลี่ย",difficulty:2},
+      {id:14,text:"ตารางรถโดยสารแสดงว่าช่วง 07.00–08.00 น. รถสาย 29 มาถึงทุก 15 นาที",category:"information",explanation:"เวลารถหลายเที่ยวถูกจัดระเบียบเป็นตารางที่ใช้วางแผนได้",difficulty:2},
+      {id:15,text:"สินค้ารุ่น A ได้คะแนนรีวิวเฉลี่ย 4.6 จาก 5 ดาว จาก 280 รีวิว",category:"information",explanation:"คะแนนรีวิวจำนวนมากถูกสรุปเป็นค่าเฉลี่ยและจำนวนผู้รีวิว",difficulty:2},
+      {id:16,text:"รายงานระบุว่าโพสต์วิดีโอมีการแชร์มากกว่าโพสต์ข้อความ 2.3 เท่าในเดือนนี้",category:"information",explanation:"ข้อมูลการแชร์ถูกเปรียบเทียบและสรุปอย่างมีบริบท",difficulty:2},
+      {id:17,text:"แผนภูมิคุณภาพอากาศแสดงว่าค่า PM2.5 สูงที่สุดในช่วง 06.00–08.00 น.",category:"information",explanation:"ข้อมูลเซนเซอร์หลายช่วงเวลาถูกจัดแสดงให้เห็นความหมาย",difficulty:2},
+      {id:18,text:"ใบแจ้งค่าไฟระบุว่าบ้านใช้ไฟมากขึ้น 12% เมื่อเทียบกับเดือนก่อน",category:"information",explanation:"ข้อมูลมิเตอร์ถูกเปรียบเทียบกับช่วงเวลาก่อนหน้า",difficulty:2},
+      {id:19,text:"แดชบอร์ดแสดงว่าผู้ใช้ส่วนใหญ่เปิดแอปในช่วง 20.00–22.00 น.",category:"information",explanation:"เวลาใช้งานจำนวนมากถูกสรุปเป็นช่วงเวลาที่มีความหมาย",difficulty:2},
+      {id:20,text:"กราฟน้ำหนักแสดงว่าน้ำหนักลดลง 1.2 กิโลกรัมในช่วง 4 สัปดาห์",category:"information",explanation:"ค่าน้ำหนักหลายครั้งถูกเปรียบเทียบและสรุปเป็นแนวโน้ม",difficulty:2},
+
+      {id:21,text:"นักเรียนที่ทำแบบฝึกหัดสม่ำเสมอมักได้คะแนนสอบสูงกว่า",category:"knowledge",explanation:"เป็นความเข้าใจเกี่ยวกับความสัมพันธ์ระหว่างพฤติกรรมและผลการเรียน",difficulty:3},
+      {id:22,text:"เมื่อความชื้นสูงและความกดอากาศลดลง มักเป็นสัญญาณว่าฝนอาจตก",category:"knowledge",explanation:"เป็นข้อสรุปจากการเชื่อมโยงข้อมูลอากาศหลายตัวแปร",difficulty:3},
+      {id:23,text:"การเดินอย่างน้อยวันละ 8,000 ก้าวอย่างต่อเนื่องช่วยให้ร่างกายเคลื่อนไหวเพียงพอสำหรับหลายคน",category:"knowledge",explanation:"เป็นความเข้าใจที่เกิดจากการวิเคราะห์ข้อมูลสุขภาพและหลักการออกกำลังกาย",difficulty:3},
+      {id:24,text:"หากรถสายเดิมมาช้าในวันฝนตกบ่อยครั้ง ควรเผื่อเวลาเดินทางเพิ่ม",category:"knowledge",explanation:"เป็นความเข้าใจถึงรูปแบบความสัมพันธ์ระหว่างฝนกับการเดินทาง",difficulty:3},
+      {id:25,text:"รีวิวที่มีจำนวนมากและคะแนนเฉลี่ยสูงมักน่าเชื่อถือกว่าความเห็นเพียงหนึ่งรายการ",category:"knowledge",explanation:"เป็นหลักการที่ได้จากการพิจารณาแหล่งข้อมูลและปริมาณข้อมูล",difficulty:3},
+      {id:26,text:"วิดีโอสั้นที่มีภาพชัดเจนมักทำให้ผู้ชมมีส่วนร่วมมากกว่าข้อความยาว",category:"knowledge",explanation:"เป็นข้อสรุปเกี่ยวกับรูปแบบพฤติกรรมจากข้อมูลการมีส่วนร่วม",difficulty:3},
+      {id:27,text:"การเปิดหน้าต่างในช่วงค่าฝุ่นสูงอาจทำให้ฝุ่นจากภายนอกเข้าสู่ห้องมากขึ้น",category:"knowledge",explanation:"เป็นความเข้าใจจากการเชื่อมโยงข้อมูลคุณภาพอากาศกับสภาพแวดล้อม",difficulty:3},
+      {id:28,text:"เครื่องใช้ไฟฟ้าที่เปิดทิ้งไว้ในช่วงไม่มีคนอยู่เป็นสาเหตุสำคัญของการใช้ไฟเกินจำเป็น",category:"knowledge",explanation:"เป็นข้อสรุปเชิงสาเหตุจากรูปแบบการใช้พลังงาน",difficulty:3},
+      {id:29,text:"ผู้ใช้ที่ได้รับการแจ้งเตือนตรงช่วงเวลาที่มักเปิดแอปมีแนวโน้มกลับมาใช้งานมากกว่า",category:"knowledge",explanation:"เป็นความเข้าใจจากการวิเคราะห์พฤติกรรมผู้ใช้",difficulty:3},
+      {id:30,text:"น้ำหนักที่เปลี่ยนแปลงเร็วในวันเดียวอาจเกิดจากปริมาณน้ำในร่างกาย ไม่ใช่ไขมันเสมอไป",category:"knowledge",explanation:"เป็นความเข้าใจจากการตีความข้อมูลน้ำหนักร่วมกับความรู้สุขภาพ",difficulty:3},
+
+      {id:31,text:"ครูจัดกิจกรรมเสริมและติดตามผลรายบุคคลให้ผู้เรียนที่มีคะแนนต่ำ",category:"wisdom",explanation:"เป็นการใช้ความรู้เรื่องผลการเรียนเพื่อตัดสินใจช่วยเหลืออย่างเหมาะสม",difficulty:4},
+      {id:32,text:"เมื่อพยากรณ์ว่าฝนตกหนัก โรงเรียนประกาศให้นักเรียนเตรียมร่มและปรับกิจกรรมกลางแจ้ง",category:"wisdom",explanation:"เป็นการใช้สารสนเทศอากาศร่วมกับเหตุผลเพื่อกำหนดแนวทางปฏิบัติ",difficulty:4},
+      {id:33,text:"ผู้เรียนวางแผนเดินหลังเลิกเรียนวันละ 30 นาทีเพื่อเพิ่มกิจกรรมทางกายอย่างต่อเนื่อง",category:"wisdom",explanation:"เป็นการใช้ความรู้สุขภาพเพื่อตัดสินใจปรับพฤติกรรม",difficulty:4},
+      {id:34,text:"กานต์เลือกออกจากบ้านเร็วขึ้น 20 นาทีในวันที่ฝนตกเพื่อลดความเสี่ยงไปสาย",category:"wisdom",explanation:"เป็นการใช้ความรู้จากรูปแบบการเดินทางเพื่อตัดสินใจ",difficulty:4},
+      {id:35,text:"ก่อนซื้อสินค้า ผู้ซื้อเลือกเปรียบเทียบรีวิวจำนวนมากและตรวจสอบเงื่อนไขรับประกัน",category:"wisdom",explanation:"เป็นการใช้ข้อมูลและเหตุผลเพื่อเลือกซื้ออย่างรอบคอบ",difficulty:4},
+      {id:36,text:"ผู้ดูแลเพจเลือกเผยแพร่วิดีโอความรู้ในช่วงเวลาที่กลุ่มเป้าหมายใช้งานมากที่สุด",category:"wisdom",explanation:"เป็นการใช้ความรู้พฤติกรรมผู้ชมเพื่อตัดสินใจสื่อสาร",difficulty:4},
+      {id:37,text:"เมื่อค่าฝุ่นสูง ครอบครัวเลือกปิดหน้าต่างและใช้เครื่องฟอกอากาศในห้อง",category:"wisdom",explanation:"เป็นการใช้ข้อมูลคุณภาพอากาศและความรู้เรื่องสุขภาพเพื่อป้องกันผลกระทบ",difficulty:4},
+      {id:38,text:"ครอบครัวกำหนดกติกาปิดปลั๊กเครื่องใช้ไฟฟ้าที่ไม่จำเป็นก่อนออกจากบ้าน",category:"wisdom",explanation:"เป็นการเลือกแนวทางลดการใช้พลังงานอย่างเหมาะสม",difficulty:4},
+      {id:39,text:"ทีมพัฒนาเลือกส่งการแจ้งเตือนเฉพาะผู้ใช้ที่ยินยอม เพื่อเคารพความเป็นส่วนตัว",category:"wisdom",explanation:"เป็นการตัดสินใจโดยใช้ความรู้ร่วมกับคุณค่าและผลกระทบต่อผู้ใช้",difficulty:4},
+      {id:40,text:"ผู้เรียนปรึกษาครูเมื่อพบว่าน้ำหนักเปลี่ยนแปลงผิดปกติต่อเนื่อง แทนการสรุปเองจากข้อมูลเพียงวันเดียว",category:"wisdom",explanation:"เป็นการตัดสินใจอย่างรอบคอบโดยคำนึงถึงความปลอดภัยและข้อจำกัดของข้อมูล",difficulty:4}
+    ];
+
+    const stages = [
+      {name:"ด่านที่ 1: รู้จัก DIKW", message:"เริ่มจากสังเกตว่าเป็นข้อมูลดิบ ข้อมูลมีความหมาย ความเข้าใจ หรือการตัดสินใจ", time:0, categories:["data","information","knowledge","wisdom"]},
+      {name:"ด่านที่ 2: จากข้อมูลสู่สารสนเทศ", message:"พิจารณาว่าข้อความเป็นค่าดิบ หรือผ่านการคำนวณ จัดระเบียบ และเพิ่มบริบทแล้ว", time:30, categories:["data","information"]},
+      {name:"ด่านที่ 3: จากสารสนเทศสู่ความรู้", message:"มองหาการวิเคราะห์ แนวโน้ม ความสัมพันธ์ หรือหลักการที่เกิดจากสารสนเทศ", time:25, categories:["information","knowledge"]},
+      {name:"ด่านที่ 4: การตัดสินใจด้วยปัญญา", message:"ใช้เหตุผลพิจารณาว่าข้อความใดสะท้อนการเลือกแนวทางที่เหมาะสม", time:20, categories:["data","information","knowledge","wisdom"]}
+    ];
+
+    const categoryThai = {data:"Data — ข้อมูล", information:"Information — สารสนเทศ", knowledge:"Knowledge — ความรู้", wisdom:"Wisdom — ปัญญา"};
+    const hints = {
+      data:"ลองถามว่า: นี่คือข้อเท็จจริง ตัวเลข หรือค่าที่เก็บมาโดยตรงหรือไม่?",
+      information:"ลองถามว่า: ข้อมูลนี้ผ่านการคำนวณ เปรียบเทียบ จัดระเบียบ หรือเพิ่มบริบทแล้วหรือไม่?",
+      knowledge:"ลองถามว่า: ข้อความนี้บอกความสัมพันธ์ รูปแบบ สาเหตุ หรือหลักการที่เราเข้าใจหรือไม่?",
+      wisdom:"ลองถามว่า: ข้อความนี้เสนอการตัดสินใจ การเลือก หรือแนวทางปฏิบัติที่เหมาะสมหรือไม่?"
+    };
+
+    const state = {
+      player:"ผู้เล่น",
+      deck:[],
+      current:0,
+      score:0,
+      energy:5,
+      combo:0,
+      maxCombo:0,
+      firstCorrect:0,
+      retriedCorrect:0,
+      hintsUsed:0,
+      stageHints:0,
+      mistakes:0,
+      answered:0,
+      gameSeconds:0,
+      timeLeft:0,
+      timer:null,
+      paused:false,
+      locked:false,
+      selected:false,
+      drag:false,
+      sound:localStorage.getItem("dikw-sound") !== "off",
+      volume:1,
+      audio:null,
+      review:[]
+    };
+
+    let arStream = null;
+
+    const $ = id => document.getElementById(id);
+    const levels = [...document.querySelectorAll(".level")];
+
+    function shuffle(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function stageOf(index) { return Math.min(3, Math.floor(index / 5)); }
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${String(s).padStart(2,"0")}`;
+    }
+
+    function setRobot(mood) {
+      ["robot-game", "robot-result", "robot-start"].forEach(id => {
+        const robot = $(id);
+        if (!robot) return;
+        robot.classList.remove("happy","cheer");
+        if (mood) robot.classList.add(mood);
+      });
+    }
+
+    function initAudio() {
+      if (!state.audio && state.sound) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) state.audio = new AudioCtx();
+      }
+      if (state.audio && state.audio.state === "suspended") state.audio.resume();
+    }
+
+    function tone(freq, duration, type="sine", volume=.05, delay=0) {
+      if (!state.sound) return;
+      initAudio();
+      if (!state.audio) return;
+      const ctx = state.audio, now = ctx.currentTime + delay;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = type; osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume * state.volume, now + .02);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now); osc.stop(now + duration + .03);
+    }
+
+    function sound(kind) {
+      if (!state.sound) return;
+      if (kind === "start") { tone(330,.1,"sine",.06); tone(494,.17,"sine",.06,.11); }
+      if (kind === "select") tone(620,.08,"square",.035);
+      if (kind === "drop") tone(430,.08,"sine",.045);
+      if (kind === "correct") { tone(523,.11,"sine",.06); tone(659,.13,"sine",.06,.1); tone(784,.18,"sine",.07,.2); }
+      if (kind === "wrong") { tone(190,.18,"sawtooth",.05); tone(150,.2,"sawtooth",.04,.12); }
+      if (kind === "combo") { tone(880,.08,"square",.045); tone(1046,.15,"square",.045,.09); }
+      if (kind === "stage") { tone(523,.12,"sine",.05); tone(659,.12,"sine",.05,.12); tone(784,.22,"sine",.06,.24); }
+      if (kind === "end") { tone(392,.12,"sine",.05); tone(523,.15,"sine",.05,.13); tone(659,.25,"sine",.06,.28); }
+    }
+
+    function updateSoundButtons() {
+      $("sound-start").textContent = state.sound ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด";
+      $("sound-game").innerHTML = state.sound ? '<i data-lucide="volume-2"></i>' : '<i data-lucide="volume-x"></i>';
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function toggleSound() {
+      state.sound = !state.sound;
+      localStorage.setItem("dikw-sound", state.sound ? "on" : "off");
+      if (state.sound) { initAudio(); sound("select"); }
+      updateSoundButtons();
+    }
+
+    function updateHUD() {
+      $("hud-player").textContent = state.player;
+      $("hud-score").textContent = state.score.toLocaleString();
+      $("hud-energy").textContent = "⚡".repeat(state.energy) + "·".repeat(5 - state.energy);
+      $("hud-stage").textContent = `${stageOf(state.current) + 1} / 4`;
+      $("hud-question").textContent = `${Math.min(state.current + 1, 20)} / 20`;
+      $("hud-combo").textContent = `x${state.combo}`;
+      const currentStage = stages[stageOf(state.current)];
+      $("hud-time").textContent = currentStage?.time ? `${state.timeLeft}s` : "ไม่จำกัด";
+    }
+
+    function showFeedback(type, title, message) {
+      const box = $("feedback-box");
+      box.className = `feedback glass ${type || ""}`;
+      $("feedback-title").textContent = title;
+      $("feedback-text").textContent = message;
+    }
+
+    function startTimer() {
+      clearInterval(state.timer);
+      const stage = stages[stageOf(state.current)];
+      state.timeLeft = stage.time;
+      updateHUD();
+      state.timer = setInterval(() => {
+        if (state.paused || state.locked || !stage.time) return;
+        state.gameSeconds++;
+        state.timeLeft--;
+        updateHUD();
+        if (state.timeLeft <= 0) {
+          clearInterval(state.timer);
+          state.locked = true;
+          state.energy--;
+          state.combo = 0;
+          showFeedback("error","หมดเวลา","เดต้าให้กำลังใจ! ข้อนี้จะผ่านไป และเราจะลองข้อถัดไป");
+          sound("wrong");
+          setRobot("cheer");
+          setTimeout(() => {
+            state.review.push({...state.deck[state.current], outcome:"หมดเวลา"});
+            nextQuestion();
+          }, 1700);
         }
-      };
-      drawVideo();
-      return true;
+      },1000);
     }
-  } catch(err) {
-    alert('ไม่สามารถเชื่อมต่อกล้องได้ ระบบจะเปลี่ยนเป็นโหมดควบคุมด้วยสัมผัส/เมาส์แทน');
-    console.error('AR Camera Error:', err);
-    return false;
-  }
-  return false;
-}
 
-function stopCamera() {
-  if (state.videoStream) {
-    state.videoStream.getTracks().forEach(track => track.stop());
-    state.videoStream = null;
-  }
-}
-
-/* Game Mechanics & Core Logic */
-function startGame(mode) {
-  state.controlMode = mode;
-  state.score = 0;
-  state.questionIndex = 0;
-  state.isPaused = false;
-  state.isProcessingAnswer = false;
-  state.elapsedSeconds = 0;
-  
-  state.questions = [...QUESTIONS_DATABASE].sort(() => Math.random() - 0.5);
-
-  showScreen('gameScreen');
-  updateHUD();
-  loadCurrentQuestion();
-  startTimer();
-}
-
-function loadCurrentQuestion() {
-  if (state.questionIndex >= state.questions.length) {
-    endGame();
-    return;
-  }
-  const q = state.questions[state.questionIndex];
-  document.getElementById('cardText').innerText = q.text;
-  document.getElementById('cardHint').innerText = '';
-  document.getElementById('hudQuestionNum').innerText = `${state.questionIndex + 1}/${state.questions.length}`;
-  state.isProcessingAnswer = false;
-}
-
-function handleDrop(selectedType) {
-  if (state.isPaused || state.isProcessingAnswer || state.screen !== 'gameScreen') return;
-  state.isProcessingAnswer = true;
-
-  const currentQ = state.questions[state.questionIndex];
-  const targetZone = document.querySelector(`.pyramid-zone[data-level="${selectedType}"]`);
-
-  if (selectedType === currentQ.type) {
-    playSound('correct');
-    state.score += 100;
-    if (targetZone) {
-      targetZone.classList.add('correct');
-      const rect = targetZone.getBoundingClientRect();
-      createExplosion(rect.left + rect.width / 2, rect.top + rect.height / 2, '#00ff88');
+    function startGame() {
+      initAudio();
+      state.player = $("player-name").value.trim() || "นักสำรวจข้อมูล";
+      state.deck = shuffle(cardBank).slice(0,20);
+      state.current = 0; state.score = 0; state.energy = 5; state.combo = 0; state.maxCombo = 0;
+      state.firstCorrect = 0; state.retriedCorrect = 0; state.hintsUsed = 0; state.stageHints = 0;
+      state.mistakes = 0; state.answered = 0; state.gameSeconds = 0; state.locked = false; state.selected = false;
+      state.paused = false; state.review = [];
+      $("start-view").classList.add("hidden");
+      $("result-view").classList.add("hidden");
+      $("game-view").classList.remove("hidden");
+      sound("start");
+      renderQuestion(true);
     }
-  } else {
-    playSound('wrong');
-    if (targetZone) {
-      targetZone.classList.add('wrong');
-      const rect = targetZone.getBoundingClientRect();
-      createExplosion(rect.left + rect.width / 2, rect.top + rect.height / 2, '#ff3366');
+
+    function renderQuestion(announceStage) {
+      if (state.current >= 20 || state.energy <= 0) return endGame();
+      const stageIndex = stageOf(state.current);
+      const stage = stages[stageIndex];
+      if (state.current % 5 === 0) {
+        state.stageHints = 0;
+        if (announceStage) openStageIntro(stageIndex);
+      }
+      $("stage-name").textContent = stage.name;
+      $("stage-message").textContent = stage.message;
+      const card = state.deck[state.current];
+      $("card-index").textContent = `SIGNAL ${String(state.current+1).padStart(2,"0")} / 20`;
+      $("card-text").textContent = card.text;
+      $("scenario-card").classList.remove("selected","dragging");
+      state.selected = false;
+      levels.forEach(level => {
+        level.disabled = !stage.categories.includes(level.dataset.category);
+        level.style.opacity = level.disabled ? ".32" : "1";
+      });
+      setRobot("");
+      showFeedback("","ภารกิจใหม่","ลากการ์ดไปยังชั้น DIKW หรือแตะการ์ด แล้วแตะคำตอบ");
+      state.locked = false;
+      startTimer();
+      updateHUD();
     }
-  }
 
-  updateHUD();
+    function openStageIntro(stageIndex) {
+      state.paused = true;
+      const stage = stages[stageIndex];
+      openModal("MISSION BRIEF", stage.name,
+        `<p>${stage.message}</p><p class="mt-3 text-cyan-200">ในด่านนี้มีเวลา ${stage.time ? stage.time + " วินาทีต่อข้อ" : "ไม่จำกัดเวลา"} และมี 5 ข้อ</p>`,
+        [{label:"เริ่มภารกิจ", primary:true, action:() => { state.paused=false; closeModal(); }}]
+      );
+    }
 
-  setTimeout(() => {
-    document.querySelectorAll('.pyramid-zone').forEach(z => {
-      z.classList.remove('correct', 'wrong');
+    function selectCard() {
+      if (state.locked) return;
+      state.selected = !state.selected;
+      $("scenario-card").classList.toggle("selected",state.selected);
+      showFeedback("", state.selected ? "เลือกการ์ดแล้ว" : "ยกเลิกการเลือก", state.selected ? "เลือกชั้น DIKW ที่เหมาะสมเพื่อวางการ์ด" : "แตะการ์ดอีกครั้งเมื่อต้องการเลือก");
+      sound("select");
+    }
+
+    function answer(category) {
+      if (state.locked || !state.selected) {
+        if (!state.locked) showFeedback("error","เลือกการ์ดก่อน","แตะหรือคลิกการ์ดสถานการณ์ แล้วเลือกชั้น DIKW ที่ต้องการ");
+        return;
+      }
+      const card = state.deck[state.current];
+      sound("drop");
+      state.locked = true;
+      if (card.category === category) {
+        const points = state.mistakes === 0 ? 100 : state.mistakes === 1 ? 70 : 50;
+        state.score += points;
+        if (state.mistakes === 0) state.firstCorrect++; else state.retriedCorrect++;
+        state.combo++;
+        state.maxCombo = Math.max(state.maxCombo,state.combo);
+        let bonus = "";
+        if (state.combo === 3) { state.score += 50; bonus = " โบนัส Combo +50"; sound("combo"); }
+        if (state.combo === 5) { state.score += 100; bonus = " โบนัส Combo +100"; sound("combo"); }
+        state.answered++;
+        showFeedback("success","✓ ยอดเยี่ยม!", `จัดอยู่ในหมวด ${categoryThai[card.category]} — ${card.explanation} (+${points}${bonus})`);
+        sound("correct"); setRobot("happy"); updateHUD();
+        state.review.push({...card,outcome:"ถูก"});
+        setTimeout(() => {
+          if ((state.current + 1) % 5 === 0) awardStageBonus();
+          else nextQuestion();
+        },2600);
+      } else {
+        state.energy = Math.max(0,state.energy-1);
+        state.combo = 0;
+        state.mistakes++;
+        setRobot("cheer");
+        sound("wrong");
+        updateHUD();
+        if (state.energy <= 0) {
+          showFeedback("error","พลังงานหมดแล้ว","เดต้าภูมิใจที่คุณพยายาม มาดูผลการเรียนรู้กัน!");
+          state.review.push({...card,outcome:"พลังงานหมด"});
+          setTimeout(endGame,1800);
+          return;
+        }
+        const extra = state.mistakes >= 2 ? ` คำอธิบายเพิ่ม: ${hints[card.category]}` : " ลองคิดอีกครั้ง เดต้าจะยังไม่เฉลย!";
+        showFeedback("error","ยังไม่ใช่ แต่ไม่เป็นไร!", `พลังงานลดลง 1 หน่วย${extra}`);
+        $("scenario-card").classList.remove("selected");
+        state.selected=false;
+        setTimeout(() => { state.locked=false; },1000);
+      }
+    }
+
+    function awardStageBonus() {
+      clearInterval(state.timer);
+      state.score += 100;
+      const perfect = state.energy === 5;
+      if (perfect) state.score += 100;
+      updateHUD(); sound("stage");
+      openModal("STAGE CLEAR", "ผ่านด่านสำเร็จ!",
+        `<p>เดต้าประมวลผลภารกิจแล้ว ได้โบนัสผ่านด่าน <b class="text-cyan-200">+100 คะแนน</b>${perfect ? ' และโบนัสพลังงานเต็ม <b class="text-yellow-200">+100 คะแนน</b>' : ""}</p>`,
+        [{label:"ไปด่านถัดไป",primary:true,action:() => { closeModal(); nextQuestion(); }}]
+      );
+    }
+
+    function nextQuestion() {
+      clearInterval(state.timer);
+      state.current++;
+      state.mistakes=0;
+      if (state.current >= 20) { endGame(); return; }
+      renderQuestion(state.current % 5 === 0);
+    }
+
+    function useHint() {
+      if (state.locked) return;
+      if (state.stageHints >= 2) {
+        showFeedback("error","ใช้คำใบ้ครบแล้ว","ด่านนี้ใช้คำใบ้ได้สูงสุด 2 ครั้ง ลองวิเคราะห์จากข้อความบนการ์ดอีกครั้ง");
+        return;
+      }
+      const card = state.deck[state.current];
+      state.stageHints++; state.hintsUsed++;
+      state.score = Math.max(0,state.score-20);
+      updateHUD();
+      showFeedback("",`คำใบ้จากเดต้า (${state.stageHints}/2)`,hints[card.category] + " ใช้คำใบ้หัก 20 คะแนน");
+      sound("select");
+    }
+
+    function endGame() {
+      clearInterval(state.timer);
+      state.locked=true;
+      $("game-view").classList.add("hidden");
+      $("result-view").classList.remove("hidden");
+      const total = Math.max(1,state.answered + (state.energy <= 0 ? 0 : 0));
+      const accuracy = Math.round((state.firstCorrect / Math.max(1,state.answered)) * 100);
+      const highest = Math.max(Number(localStorage.getItem("dikw-high-score") || 0),state.score);
+      localStorage.setItem("dikw-high-score",highest);
+      let level, advice;
+      if (accuracy >= 80) { level="นักวิเคราะห์ข้อมูลระดับยอดเยี่ยม"; advice="คุณแยกแยะ DIKW ได้อย่างแม่นยำมาก ลองนำกรอบนี้ไปวิเคราะห์ข่าว ข้อมูลสุขภาพ หรือปัญหาในชีวิตจริงต่อไป!"; }
+      else if (accuracy >= 70) { level="นักสำรวจข้อมูลระดับดีมาก"; advice="คุณเข้าใจลำดับ DIKW ดีมาก ลองทบทวนข้อที่ตอบใหม่เพื่อมองเห็นจุดต่างระหว่างความรู้และปัญญาให้ชัดขึ้น"; }
+      else if (accuracy >= 60) { level="นักเรียนรู้ข้อมูลระดับดี"; advice="คุณเริ่มเชื่อมโยงข้อมูลสู่ความเข้าใจได้ดี ลองใช้คำถามสำคัญในคู่มือ DIKW ประกอบทุกครั้ง"; }
+      else { level="ผู้ฝึกฝน DIKW"; advice="การฝึกจำแนกซ้ำจะช่วยได้มาก เริ่มจากถามว่าเป็นค่าดิบ สรุปข้อมูล ข้อเข้าใจ หรือการตัดสินใจ"; }
+
+      $("result-summary").textContent = `${state.player} จบภารกิจแล้ว เดต้าส่งพลังใจให้กับการเรียนรู้ครั้งนี้!`;
+      $("result-score").textContent=state.score.toLocaleString();
+      $("result-high").textContent=highest.toLocaleString();
+      $("result-accuracy").textContent=accuracy+"%";
+      $("result-first").textContent=state.firstCorrect;
+      $("result-retry").textContent=state.retriedCorrect;
+      $("result-combo").textContent="x"+state.maxCombo;
+      $("result-hints").textContent=state.hintsUsed;
+      $("result-time").textContent=formatTime(state.gameSeconds);
+      $("result-level").textContent=level;
+      $("result-advice").textContent=advice;
+      setRobot("happy"); sound("end");
+    }
+
+    function openGuide() {
+      state.paused=true;
+      openModal("DIKW GUIDE","คู่มือ DIKW",
+        `<table class="guide-table"><thead><tr><th>ระดับ</th><th>คำถามสำคัญ</th><th>ความหมาย</th></tr></thead>
+        <tbody>
+        <tr><td class="text-sky-300">Data</td><td>มีข้อเท็จจริงอะไร?</td><td>ข้อมูลดิบที่เก็บรวบรวม</td></tr>
+        <tr><td class="text-emerald-300">Information</td><td>ข้อมูลบอกอะไร?</td><td>ข้อมูลที่ผ่านการประมวลผลและมีความหมาย</td></tr>
+        <tr><td class="text-orange-300">Knowledge</td><td>เราเข้าใจอะไร?</td><td>ข้อสรุป รูปแบบ ความสัมพันธ์ หรือเหตุผล</td></tr>
+        <tr><td class="text-purple-300">Wisdom</td><td>ควรทำอย่างไร?</td><td>การใช้ความรู้ตัดสินใจอย่างเหมาะสม</td></tr>
+        </tbody></table>`,
+        [{label:"กลับสู่เกม",primary:true,action:() => { state.paused=false; closeModal(); }}]
+      );
+    }
+
+    function openHow() {
+      openModal("HOW TO PLAY","วิธีเล่น",
+        `<ol class="list-decimal pl-5 space-y-2"><li>อ่านข้อความบนการ์ดสถานการณ์ทีละใบ</li><li>ลากการ์ดไปที่ชั้น DIKW หรือแตะการ์ดก่อน แล้วแตะชั้นที่ต้องการ</li><li>ตอบถูกเพื่อเก็บคะแนนและ Combo ตอบผิดพลังงานจะลดลง</li><li>ใช้ปุ่มหลอดไฟเพื่อขอคำใบ้ได้ด่านละ 2 ครั้ง</li><li>เปิดคู่มือ DIKW ได้ตลอดเวลา เกมจะหยุดชั่วคราว</li></ol><p class="mt-4 rounded-xl bg-amber-400/10 p-3 text-amber-100">โหมด AR จะต้องอนุญาตการเข้าถึงกล้อง หากถูกบล็อก ระบบจะเข้าสู่โหมดการแตะหรือเมาส์ให้โดยอัตโนมัติ</p>`,
+        [{label:"เข้าใจแล้ว",primary:true,action:closeModal}]
+      );
+    }
+
+    function openModal(kicker,title,html,actions=[]) {
+      $("modal-kicker").textContent=kicker;
+      $("modal-title").textContent=title;
+      $("modal-content").innerHTML=html;
+      const area=$("modal-actions"); area.innerHTML="";
+      actions.forEach(item => {
+        const button=document.createElement("button");
+        button.type="button"; button.textContent=item.label;
+        button.className=`neo-button ${item.primary ? "" : "secondary"}`;
+        button.addEventListener("click",item.action,{once:true});
+        area.appendChild(button);
+      });
+      $("modal-layer").classList.remove("hidden");
+      setTimeout(()=>$("modal-close").focus(),30);
+    }
+
+    function closeModal() {
+      $("modal-layer").classList.add("hidden");
+      if (!$("game-view").classList.contains("hidden") && !state.locked) state.paused=false;
+      
+      if (arStream) {
+        arStream.getTracks().forEach(track => track.stop());
+        arStream = null;
+      }
+    }
+
+    async function startARFallback() {
+      $("player-name").value = $("player-name").value.trim() || "นักสำรวจข้อมูล";
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        openModal("AR ERROR", "อุปกรณ์ไม่รองรับ",
+          `<p>เบราว์เซอร์ของคุณไม่รองรับการเข้าถึงกล้อง กรุณาใช้เบราว์เซอร์เวอร์ชันล่าสุด</p>`,
+          [{label: "เล่นด้วยเมาส์/สัมผัส", primary: true, action: () => { closeModal(); startGame(); }}]
+        );
+        return;
+      }
+
+      openModal("AR CAMERA", "กำลังขอสิทธิ์ใช้งานกล้อง",
+        `<div class="relative w-full aspect-video bg-black rounded-2xl overflow-hidden mt-3 border border-cyan-300/30 flex items-center justify-center">
+            <video id="ar-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden"></video>
+            <p id="ar-loading" class="text-cyan-300 animate-pulse text-sm">กำลังเชื่อมต่อกล้อง...</p>
+         </div>
+         <p id="ar-status" class="mt-3 text-blue-50 text-sm">กรุณากด 'อนุญาต' (Allow) ที่หน้าต่างป๊อปอัปของเบราว์เซอร์</p>`,
+        [{label: "ยกเลิกและใช้โหมดเมาส์", primary: false, action: () => { closeModal(); startGame(); }}]
+      );
+
+      try {
+        const stream = await Promise.race([
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000))
+        ]);
+
+        if ($("modal-layer").classList.contains("hidden")) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        arStream = stream;
+        
+        const video = $("ar-video");
+        video.srcObject = stream;
+        video.classList.remove("hidden");
+        $("ar-loading").classList.add("hidden");
+        
+        $("ar-status").textContent = "กล้องพร้อมใช้งานแล้ว! แตะเพื่อเริ่มภารกิจ";
+        $("ar-status").classList.replace("text-blue-50", "text-emerald-300");
+
+        const startBtn = document.createElement("button");
+        startBtn.type = "button";
+        startBtn.textContent = "เริ่มภารกิจ AR";
+        startBtn.className = "neo-button";
+        startBtn.onclick = () => {
+          closeModal(); 
+          startGame();
+        };
+        $("modal-actions").prepend(startBtn);
+
+      } catch (error) {
+        let errorMsg = "ไม่สามารถเปิดกล้องได้";
+        if (error.name === "NotAllowedError") {
+          errorMsg = "ถูกปฏิเสธสิทธิ์ หรือเบราว์เซอร์บล็อกไว้ (เช่น เปิดจากแอป LINE)";
+        } else if (error.name === "NotFoundError") {
+          errorMsg = "ไม่พบฮาร์ดแวร์กล้องในอุปกรณ์นี้";
+        } else if (error.message === "Timeout") {
+          errorMsg = "ใช้เวลาเชื่อมต่อนานเกินไป";
+        }
+
+        if (!$("modal-layer").classList.contains("hidden")) {
+          $("ar-loading").textContent = `❌ ${errorMsg}`;
+          $("ar-loading").classList.replace("text-cyan-300", "text-orange-400");
+          $("ar-loading").classList.remove("animate-pulse");
+          $("ar-status").textContent = "ระบบจะพาคุณเข้าสู่โหมดเมาส์/สัมผัสแทน";
+        }
+      }
+    }
+
+    function pauseGame() {
+      if (state.locked) return;
+      state.paused=true;
+      openModal("PAUSED","หยุดภารกิจชั่วคราว","<p>เวลาและการ์ดหยุดรอคุณอยู่ กดดำเนินภารกิจต่อเมื่อพร้อม</p>",
+        [{label:"ดำเนินภารกิจต่อ",primary:true,action:()=>{state.paused=false;closeModal();}}]
+      );
+    }
+
+    /* Pointer Events: รองรับเมาส์ ปากกา และหน้าจอสัมผัส */
+    let pointerActive=false;
+    $("scenario-card").addEventListener("pointerdown",e=>{
+      if (state.locked) return;
+      pointerActive=true;
+      $("scenario-card").setPointerCapture?.(e.pointerId);
+      $("scenario-card").classList.add("dragging");
     });
-    state.questionIndex++;
-    loadCurrentQuestion();
-  }, 1000);
-}
 
-function useHint() {
-  if (state.isPaused || state.screen !== 'gameScreen') return;
-  const currentQ = state.questions[state.questionIndex];
-  document.getElementById('cardHint').innerText = `💡 คำใบ้: ${currentQ.hint}`;
-}
-
-function updateHUD() {
-  document.getElementById('hudScore').innerText = state.score;
-}
-
-function startTimer() {
-  clearInterval(state.timerInterval);
-  state.timerInterval = setInterval(() => {
-    if (!state.isPaused && state.screen === 'gameScreen') {
-      state.elapsedSeconds++;
-      const m = String(Math.floor(state.elapsedSeconds / 60)).padStart(2, '0');
-      const s = String(state.elapsedSeconds % 60).padStart(2, '0');
-      document.getElementById('hudTimer').innerText = `${m}:${s}`;
-    }
-  }, 1000);
-}
-
-function togglePause() {
-  state.isPaused = !state.isPaused;
-  if (state.isPaused) {
-    openModal('pauseModal');
-  } else {
-    closeModal('pauseModal');
-  }
-}
-
-function endGame() {
-  clearInterval(state.timerInterval);
-  const m = String(Math.floor(state.elapsedSeconds / 60)).padStart(2, '0');
-  const s = String(state.elapsedSeconds % 60).padStart(2, '0');
-  document.getElementById('finalScore').innerText = state.score;
-  document.getElementById('finalTime').innerText = `${m}:${s}`;
-  openModal('gameOverModal');
-}
-
-/* Canvas Resizing Utility */
-function resizeAllCanvases() {
-  [bgCanvas, fxCanvas, document.getElementById('arVideoCanvas'), document.getElementById('arCursorCanvas')].forEach(c => {
-    if(c) {
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
-    }
-  });
-  initBgParticles();
-}
-
-/* Event Listeners Initialization */
-document.addEventListener('DOMContentLoaded', () => {
-  resizeAllCanvases();
-  renderBg();
-  renderFx();
-
-  // Mode Selection Buttons
-  document.getElementById('btnStartPointer').addEventListener('click', () => {
-    stopCamera();
-    startGame('pointer');
-  });
-
-  document.getElementById('btnStartAR').addEventListener('click', async () => {
-    ensureAudio();
-    const ok = await initAR();
-    startGame(ok ? 'ar' : 'pointer');
-  });
-
-  document.getElementById('btnOpenReviewStart').addEventListener('click', () => openModal('reviewModal'));
-  document.getElementById('btnHint').addEventListener('click', useHint);
-  document.getElementById('btnPause').addEventListener('click', togglePause);
-  document.getElementById('btnResume').addEventListener('click', togglePause);
-
-  // Modal Control Actions
-  document.getElementById('btnReplay').addEventListener('click', async () => {
-    closeModal('pauseModal');
-    if (state.controlMode === 'ar') {
-      const ok = await initAR();
-      startGame(ok ? 'ar' : 'pointer');
-    } else {
-      startGame('pointer');
-    }
-  });
-
-  document.getElementById('btnHome').addEventListener('click', () => {
-    closeModal('pauseModal');
-    stopCamera();
-    showScreen('startScreen');
-  });
-
-  document.getElementById('btnRestartGame').addEventListener('click', () => {
-    closeModal('gameOverModal');
-    startGame(state.controlMode);
-  });
-
-  document.getElementById('btnReview').addEventListener('click', () => {
-    closeModal('gameOverModal');
-    openModal('reviewModal');
-  });
-
-  // Pyramid Zone Click Handlers
-  document.querySelectorAll('.pyramid-zone').forEach(zone => {
-    zone.addEventListener('click', () => {
-      const level = zone.getAttribute('data-level');
-      handleDrop(level);
+    $("scenario-card").addEventListener("pointerup",e=>{
+      if (!pointerActive) return;
+      pointerActive=false;
+      $("scenario-card").releasePointerCapture?.(e.pointerId);
+      $("scenario-card").classList.remove("dragging");
+      const target=document.elementFromPoint(e.clientX,e.clientY)?.closest(".level");
+      if (target && !target.disabled) {
+        if (!state.selected) { state.selected=true; }
+        answer(target.dataset.category);
+      } else {
+        selectCard();
+      }
     });
-  });
 
-  // Keyboard Shortcuts Binding
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && state.screen === 'gameScreen') {
-      togglePause();
-      return;
-    }
-    if (state.screen !== 'gameScreen' || state.isPaused || state.isProcessingAnswer) return;
+    $("scenario-card").addEventListener("keydown",e=>{
+      if (e.key==="Enter" || e.key===" ") { e.preventDefault(); selectCard(); }
+    });
 
-    const map = { '1': 'data', '2': 'information', '3': 'knowledge', '4': 'wisdom' };
-    if (map[e.key]) handleDrop(map[e.key]);
-    if (e.key === 'h' || e.key === 'H') useHint();
-  });
+    levels.forEach(level=>level.addEventListener("click",()=>answer(level.dataset.category)));
 
-  window.addEventListener('resize', resizeAllCanvases);
-});
-</script>
-</body>
-</html>
+    $("start-form").addEventListener("submit",e=>{e.preventDefault();startGame();});
+    $("ar-start").addEventListener("click",startARFallback);
+    $("how-open").addEventListener("click",openHow);
+    $("guide-open-start").addEventListener("click",openGuide);
+    $("guide-open-game").addEventListener("click",openGuide);
+    $("hint-button").addEventListener("click",useHint);
+    $("pause-button").addEventListener("click",pauseGame);
+    $("sound-start").addEventListener("click",toggleSound);
+    $("sound-game").addEventListener("click",toggleSound);
+    $("modal-close").addEventListener("click",closeModal);
+    $("play-again").addEventListener("click",startGame);
+    $("home-button").addEventListener("click",()=>{
+      clearInterval(state.timer);
+      $("result-view").classList.add("hidden");
+      $("game-view").classList.add("hidden");
+      $("start-view").classList.remove("hidden");
+      setRobot("");
+    });
+    $("review-button").addEventListener("click",()=>{
+      const wrong=state.review.filter(item=>item.outcome!=="ถูก");
+      const content=wrong.length
+        ? `<div class="space-y-3">${wrong.map(item=>`<div class="rounded-xl border border-orange-300/25 bg-orange-950/20 p-3"><b class="text-orange-200">${item.text}</b><p class="mt-1 mb-0 text-sm">คำตอบ: ${categoryThai[item.category]}<br>${item.explanation}</p></div>`).join("")}</div>`
+        : "<p>ยอดเยี่ยม! คุณไม่มีข้อที่ต้องทบทวนในรอบนี้</p>";
+      openModal("REVIEW","ทบทวนข้อที่ตอบผิด",content,[{label:"ปิด",primary:true,action:closeModal}]);
+    });
+
+    document.addEventListener("visibilitychange",()=>{
+      if (document.hidden && !$("game-view").classList.contains("hidden")) state.paused=true;
+    });
+
+    document.addEventListener("keydown",e=>{
+      if (e.key==="Escape" && !$("modal-layer").classList.contains("hidden")) closeModal();
+      if (e.key.toLowerCase()==="h" && !$("game-view").classList.contains("hidden")) useHint();
+    });
+
+    updateSoundButtons();
+    if (window.lucide) lucide.createIcons();
+  </script>
+ 
+</body></html>
